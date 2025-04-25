@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: all
+spec:
+  template:
+    spec:
+      containers:
+      - name: monitoramento
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 300m
+            memory: 512Mi
+      - name: diagnostico
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 768Mi
+      - name: gerador-acoes
+        resources:
+          limits:
+            cpu: 1500m
+            memory: 1.5Gi
+          requests:
+            cpu: 400m
+            memory: 512Mi
+      - name: observabilidade
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 300m
+            memory: 512Mi
