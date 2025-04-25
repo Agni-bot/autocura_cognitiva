@@ -2,11 +2,11 @@ FROM golang:1.18-alpine
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
-RUN go mod download
-
 COPY . .
 
-RUN go build -o rollback-operator ./controller/main.go
+RUN go mod download
+RUN go build -o rollback-operator ./controller/
+
+EXPOSE 8080
 
 CMD ["./rollback-operator"]
