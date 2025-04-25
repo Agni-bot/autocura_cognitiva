@@ -14,8 +14,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	rollbackv1 "github.com/autocura-cognitiva/rollback-operator/api/v1"
-	"github.com/autocura-cognitiva/rollback-operator/controllers"
+	rollbackv1 "https://github.com/Agni-bot/autocura-cognitiva/tree/main/kubernetes/operators/rollback-operator/api/v1"
+	"github.com/https://github.com/Agni-bot/autocura-cognitiva/tree/main/kubernetes/operators/rollback-operator/controller"
 )
 
 var (
