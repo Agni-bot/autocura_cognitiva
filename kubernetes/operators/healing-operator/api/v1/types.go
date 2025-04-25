@@ -1,9 +1,9 @@
 package v1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    "k8s.io/apimachinery/pkg/runtime"
+    "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // GroupVersion é a versão da API para o pacote healing
@@ -17,12 +17,13 @@ var AddToScheme = SchemeBuilder.AddToScheme
 
 // addKnownTypes adiciona os tipos definidos neste pacote ao esquema
 func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(GroupVersion,
-		&HealingPolicy{},
-		&HealingPolicyList{},
-	)
-	metav1.AddToGroupVersion(scheme, GroupVersion)
-	return nil
+    scheme.AddKnownTypes(
+        GroupVersion,
+        &HealingPolicy{},
+        &HealingPolicyList{},
+    )
+    metav1.AddToGroupVersion(scheme, GroupVersion)
+    return nil
 }
 
 // HealingPolicy define uma política de healing para recursos Kubernetes
@@ -33,7 +34,21 @@ type HealingPolicy struct {
 	Spec   HealingPolicySpec   `json:"spec,omitempty"`
 	Status HealingPolicyStatus `json:"status,omitempty"`
 }
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type HealingPolicy struct {
+    metav1.TypeMeta   `json:",inline"`
+    metav1.ObjectMeta `json:"metadata,omitempty"`
+    // ... (campos existentes)
+}
 
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type HealingPolicyList struct {
+    metav1.TypeMeta `json:",inline"`
+    metav1.ListMeta `json:"metadata,omitempty"`
+    Items           []HealingPolicy `json:"items"`
+}
 // HealingPolicySpec define a especificação desejada para uma HealingPolicy
 type HealingPolicySpec struct {
 	// Seletor para os recursos alvo desta política

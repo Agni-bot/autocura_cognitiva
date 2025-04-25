@@ -2,18 +2,17 @@ FROM golang:1.18-alpine AS builder
 
 WORKDIR /app
 
-# 1. Copia arquivos de dependências
+# Copia primeiro os arquivos de módulo
 COPY go.mod go.sum ./
-# 2. Baixa e sincroniza dependências
-RUN go mod download && go mod tidy
+RUN go mod download
 
-# 3. Copia o código-fonte
+# Copia o restante do código
 COPY . .
 
-# 4. Compila o projeto (AGORA na raiz, pois main.go foi movido)
+# Compila o projeto
 RUN go build -o healing-operator ./main.go
 
-# 5. Etapa de execução leve
+# Etapa final
 FROM alpine:3.16
 WORKDIR /app
 COPY --from=builder /app/healing-operator .
