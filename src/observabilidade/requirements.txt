@@ -16,3 +16,4 @@ uvicorn==0.15.0
 pydantic==1.9.0
 grafana-api==1.0.3
 elasticsearch==7.16.0
+networkx==2.6.3

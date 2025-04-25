@@ -16,9 +16,7 @@ from scipy import stats
 import random
 import math
 from datetime import datetime
-
-# Importação do módulo de monitoramento
-from monitoramento.monitoramento import MetricaDimensional
+import requests
 
 # Configuração de logging
 logging.basicConfig(
@@ -27,6 +25,102 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("DiagnosticoRedeNeural")
+
+# Classe local para substituir importação direta
+@dataclass
+class MetricaDimensional:
+    """Classe local que substitui a importação de monitoramento.monitoramento.MetricaDimensional"""
+    id: str
+    nome: str
+    valor: float
+    timestamp: float
+    dimensao: str
+    unidade: str
+    tags: Dict[str, str] = field(default_factory=dict)
+    metadados: Dict[str, Any] = field(default_factory=dict)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'MetricaDimensional':
+        """Cria uma instância de métrica a partir de um dicionário."""
+        return cls(
+            id=data["id"],
+            nome=data["nome"],
+            valor=data["valor"],
+            timestamp=data["timestamp"],
+            dimensao=data["dimensao"],
+            unidade=data["unidade"],
+            tags=data.get("tags", {}),
+            metadados=data.get("metadados", {})
+        )
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Converte a métrica para formato de dicionário."""
+        return {
+            "id": self.id,
+            "nome": self.nome,
+            "valor": self.valor,
+            "timestamp": self.timestamp,
+            "dimensao": self.dimensao,
+            "unidade": self.unidade,
+            "tags": self.tags,
+            "metadados": self.metadados
+        }
+
+# Função para comunicação com o serviço de monitoramento
+def obter_metricas_do_monitoramento(metrica_id=None):
+    """
+    Obtém métricas do serviço de monitoramento via API REST.
+    
+    Args:
+        metrica_id: ID opcional da métrica específica
+        
+    Returns:
+        Lista de métricas ou uma métrica específica
+    """
+    try:
+        base_url = "http://monitoramento:8080/api/metricas"
+        if metrica_id:
+            url = f"{base_url}/{metrica_id}"
+        else:
+            url = base_url
+            
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if metrica_id:
+            # Retorna uma única métrica
+            return MetricaDimensional(
+                id=data["id"],
+                nome=data["nome"],
+                valor=data["valor"],
+                timestamp=data["timestamp"],
+                dimensao=data["dimensao"],
+                unidade=data["unidade"],
+                tags=data.get("tags", {}),
+                metadados=data.get("metadados", {})
+            )
+        else:
+            # Retorna lista de métricas
+            metricas = []
+            for item in data:
+                metrica = MetricaDimensional(
+                    id=item["id"],
+                    nome=item["nome"],
+                    valor=item["valor"],
+                    timestamp=item["timestamp"],
+                    dimensao=item["dimensao"],
+                    unidade=item["unidade"],
+                    tags=item.get("tags", {}),
+                    metadados=item.get("metadados", {})
+                )
+                metricas.append(metrica)
+            return metricas
+            
+    except Exception as e:
+        logger.error(f"Erro ao obter métricas do monitoramento: {e}")
+        return []
 
 @dataclass
 class PadraoAnomalia:
@@ -116,7 +210,7 @@ class Diagnostico:
     id: str
     timestamp: float
     anomalias_detectadas: List[Tuple[PadraoAnomalia, float]]
-    metricas_analisadas: List[MetricaDimensional]
+    metricas_analisadas: List[str]
     causa_raiz: Optional[str] = None
     confianca: float = 0.0
     recomendacoes: List[str] = field(default_factory=list)
@@ -127,15 +221,20 @@ class Diagnostico:
         return {
             "id": self.id,
             "timestamp": self.timestamp,
-            "anomalias": [
+            "anomalias_detectadas": [
                 {
-                    "id": anomalia.id,
-                    "nome": anomalia.nome,
+                    "anomalia": {
+                        "id": anomalia.id,
+                        "nome": anomalia.nome,
+                        "dimensoes": anomalia.dimensoes,
+                        "descricao": anomalia.descricao,
+                        "severidade": getattr(anomalia, "severidade", 0.5)
+                    },
                     "confianca": conf
                 }
                 for anomalia, conf in self.anomalias_detectadas
             ],
-            "metricas_analisadas": [m.to_dict() for m in self.metricas_analisadas],
+            "metricas_analisadas": self.metricas_analisadas,
             "causa_raiz": self.causa_raiz,
             "confianca": self.confianca,
             "recomendacoes": self.recomendacoes,
@@ -146,20 +245,16 @@ class Diagnostico:
     def from_dict(cls, data: Dict[str, Any], catalogo_anomalias: Dict[str, PadraoAnomalia]) -> 'Diagnostico':
         """Cria uma instância de diagnóstico a partir de um dicionário."""
         anomalias_detectadas = [
-            (catalogo_anomalias[a["id"]], a["confianca"])
-            for a in data["anomalias"]
-            if a["id"] in catalogo_anomalias
-        ]
-        
-        metricas_analisadas = [
-            MetricaDimensional.from_dict(m) for m in data["metricas_analisadas"]
+            (catalogo_anomalias[a["anomalia"]["id"]], a["confianca"])
+            for a in data["anomalias_detectadas"]
+            if a["anomalia"]["id"] in catalogo_anomalias
         ]
         
         return cls(
             id=data["id"],
             timestamp=data["timestamp"],
             anomalias_detectadas=anomalias_detectadas,
-            metricas_analisadas=metricas_analisadas,
+            metricas_analisadas=data["metricas_analisadas"],
             causa_raiz=data.get("causa_raiz"),
             confianca=data.get("confianca", 0.0),
             recomendacoes=data.get("recomendacoes", []),
@@ -404,8 +499,11 @@ class RedeNeuralHierarquica:
                 logger.error(f"Modelo '{nome}' não encontrado")
                 return None
             
-            # Treina modelo
-            historico = self.modelos[nome]["modelo"].fit(
+            modelo_info = self.modelos[nome]
+            modelo = modelo_info["modelo"]
+            
+            # Treina o modelo
+            historico = modelo.fit(
                 dados_x, dados_y,
                 validation_split=validacao,
                 epochs=epocas,
@@ -413,56 +511,66 @@ class RedeNeuralHierarquica:
                 verbose=0
             )
             
-            # Atualiza metadados
-            self.modelos[nome]["treinado"] = True
-            self.modelos[nome]["ultima_atualizacao"] = time.time()
+            # Atualiza status do modelo
+            modelo_info["treinado"] = True
+            modelo_info["ultima_atualizacao"] = time.time()
             
-            # Registra histórico
+            # Registra histórico de treinamento
+            metricas = {
+                "acuracia": float(historico.history['accuracy'][-1]),
+                "perda": float(historico.history['loss'][-1]),
+                "val_acuracia": float(historico.history['val_accuracy'][-1]),
+                "val_perda": float(historico.history['val_loss'][-1])
+            }
+            
             self.historico_treinamento[nome].append({
                 "timestamp": time.time(),
                 "epocas": epocas,
                 "tamanho_dados": len(dados_x),
-                "acuracia_final": float(historico.history['accuracy'][-1]),
-                "acuracia_validacao": float(historico.history['val_accuracy'][-1]),
-                "perda_final": float(historico.history['loss'][-1]),
-                "perda_validacao": float(historico.history['val_loss'][-1])
+                "metricas": metricas
             })
             
-            logger.info(f"Modelo '{nome}' treinado com {len(dados_x)} amostras, acurácia: {historico.history['val_accuracy'][-1]:.4f}")
+            logger.info(f"Modelo '{nome}' treinado com {len(dados_x)} exemplos. Acurácia: {metricas['acuracia']:.4f}")
             
-            return historico
+            return historico.history
     
-    def prever(self, nome: str, dados: np.ndarray) -> np.ndarray:
+    def detectar_anomalias(self, nome: str, dados: np.ndarray, limiar: float = 0.5) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Realiza previsões com um modelo específico.
+        Detecta anomalias usando um modelo específico.
         
         Args:
-            nome: Nome do modelo
+            nome: Nome do modelo a ser usado
             dados: Matriz de features de entrada
+            limiar: Limiar de probabilidade para classificação como anomalia
             
         Returns:
-            Array de previsões (probabilidades de anomalia)
+            Tuple (previsões binárias, probabilidades)
         """
         with self.lock:
             if nome not in self.modelos:
                 logger.error(f"Modelo '{nome}' não encontrado")
-                return np.array([])
+                return np.array([]), np.array([])
             
-            if not self.modelos[nome]["treinado"]:
-                logger.warning(f"Modelo '{nome}' não foi treinado")
-                return np.array([0.5] * len(dados))  # Valor neutro
+            modelo_info = self.modelos[nome]
             
-            # Realiza previsão
-            previsoes = self.modelos[nome]["modelo"].predict(dados, verbose=0)
+            if not modelo_info["treinado"]:
+                logger.warning(f"Modelo '{nome}' não foi treinado ainda")
+                return np.array([]), np.array([])
             
-            return previsoes.flatten()
+            modelo = modelo_info["modelo"]
+            
+            # Faz previsões
+            probabilidades = modelo.predict(dados, verbose=0)
+            previsoes = (probabilidades >= limiar).astype(int)
+            
+            return previsoes.flatten(), probabilidades.flatten()
     
-    def avaliar(self, nome: str, dados_x: np.ndarray, dados_y: np.ndarray) -> Dict[str, float]:
+    def avaliar_modelo(self, nome: str, dados_x: np.ndarray, dados_y: np.ndarray) -> Dict[str, float]:
         """
-        Avalia o desempenho de um modelo específico.
+        Avalia o desempenho de um modelo com dados de teste.
         
         Args:
-            nome: Nome do modelo
+            nome: Nome do modelo a ser avaliado
             dados_x: Matriz de features de entrada
             dados_y: Vetor de labels (0 = normal, 1 = anomalia)
             
@@ -474,44 +582,28 @@ class RedeNeuralHierarquica:
                 logger.error(f"Modelo '{nome}' não encontrado")
                 return {}
             
-            if not self.modelos[nome]["treinado"]:
-                logger.warning(f"Modelo '{nome}' não foi treinado")
+            modelo_info = self.modelos[nome]
+            
+            if not modelo_info["treinado"]:
+                logger.warning(f"Modelo '{nome}' não foi treinado ainda")
                 return {}
             
-            # Avalia modelo
-            resultados = self.modelos[nome]["modelo"].evaluate(dados_x, dados_y, verbose=0)
+            modelo = modelo_info["modelo"]
+            
+            # Avalia o modelo
+            resultados = modelo.evaluate(dados_x, dados_y, verbose=0)
             
             # Cria dicionário de métricas
-            metricas = {}
-            for i, metrica in enumerate(self.modelos[nome]["modelo"].metrics_names):
-                metricas[metrica] = float(resultados[i])
+            metricas = dict(zip(modelo.metrics_names, resultados))
             
-            # Calcula métricas adicionais
-            previsoes = self.prever(nome, dados_x)
-            previsoes_bin = (previsoes > 0.5).astype(int)
-            
-            # Matriz de confusão
-            tp = np.sum((previsoes_bin == 1) & (dados_y == 1))
-            tn = np.sum((previsoes_bin == 0) & (dados_y == 0))
-            fp = np.sum((previsoes_bin == 1) & (dados_y == 0))
-            fn = np.sum((previsoes_bin == 0) & (dados_y == 1))
-            
-            # Métricas derivadas
-            metricas["precisao"] = tp / (tp + fp) if (tp + fp) > 0 else 0
-            metricas["recall"] = tp / (tp + fn) if (tp + fn) > 0 else 0
-            metricas["f1"] = 2 * (metricas["precisao"] * metricas["recall"]) / (metricas["precisao"] + metricas["recall"]) if (metricas["precisao"] + metricas["recall"]) > 0 else 0
-            metricas["especificidade"] = tn / (tn + fp) if (tn + fp) > 0 else 0
-            
-            logger.info(f"Modelo '{nome}' avaliado com {len(dados_x)} amostras, F1: {metricas['f1']:.4f}")
-            
-            return metricas
+            return {k: float(v) for k, v in metricas.items()}
     
     def salvar_modelo(self, nome: str, diretorio: str):
         """
         Salva um modelo em disco.
         
         Args:
-            nome: Nome do modelo
+            nome: Nome do modelo a ser salvo
             diretorio: Diretório onde o modelo será salvo
         """
         with self.lock:
@@ -519,25 +611,28 @@ class RedeNeuralHierarquica:
                 logger.error(f"Modelo '{nome}' não encontrado")
                 return
             
+            modelo_info = self.modelos[nome]
+            modelo = modelo_info["modelo"]
+            
             # Cria diretório se não existir
             os.makedirs(diretorio, exist_ok=True)
             
             # Salva modelo
-            caminho_modelo = os.path.join(diretorio, f"{nome}_modelo")
-            self.modelos[nome]["modelo"].save(caminho_modelo)
+            caminho_modelo = os.path.join(diretorio, f"{nome}_modelo.h5")
+            modelo.save(caminho_modelo)
             
             # Salva metadados
             metadados = {
-                "colunas": self.modelos[nome]["colunas"],
-                "treinado": self.modelos[nome]["treinado"],
-                "criado_em": self.modelos[nome]["criado_em"],
-                "ultima_atualizacao": self.modelos[nome].get("ultima_atualizacao"),
+                "colunas": modelo_info["colunas"],
+                "treinado": modelo_info["treinado"],
+                "criado_em": modelo_info["criado_em"],
+                "ultima_atualizacao": modelo_info.get("ultima_atualizacao"),
                 "historico": self.historico_treinamento[nome]
             }
             
             caminho_metadados = os.path.join(diretorio, f"{nome}_metadados.json")
             with open(caminho_metadados, 'w') as f:
-                json.dump(metadados, f, indent=2)
+                json.dump(metadados, f)
             
             logger.info(f"Modelo '{nome}' salvo em {diretorio}")
     
@@ -546,12 +641,12 @@ class RedeNeuralHierarquica:
         Carrega um modelo do disco.
         
         Args:
-            nome: Nome do modelo
+            nome: Nome do modelo a ser carregado
             diretorio: Diretório onde o modelo está salvo
         """
         with self.lock:
             # Verifica se arquivos existem
-            caminho_modelo = os.path.join(diretorio, f"{nome}_modelo")
+            caminho_modelo = os.path.join(diretorio, f"{nome}_modelo.h5")
             caminho_metadados = os.path.join(diretorio, f"{nome}_metadados.json")
             
             if not os.path.exists(caminho_modelo) or not os.path.exists(caminho_metadados):
@@ -574,738 +669,104 @@ class RedeNeuralHierarquica:
                 "ultima_atualizacao": metadados.get("ultima_atualizacao")
             }
             
-            # Carrega histórico
+            # Carrega histórico de treinamento
             self.historico_treinamento[nome] = metadados.get("historico", [])
             
             logger.info(f"Modelo '{nome}' carregado de {diretorio}")
 
-
-class DetectorAnomaliasCaoticas:
-    """
-    Identifica comportamentos não-lineares indicativos de problemas.
+# Inicialização da API e rotas
+if __name__ == "__main__":
+    from flask import Flask, request, jsonify
     
-    Como um observador do caos que percebe padrões na aleatoriedade,
-    detecta as assinaturas sutis de sistemas complexos em desequilíbrio,
-    revelando ordem oculta nas flutuações aparentemente aleatórias.
-    """
-    def __init__(self, janela_analise: int = 100, dimensao_embedding: int = 3, delay: int = 1):
-        self.janela_analise = janela_analise
-        self.dimensao_embedding = dimensao_embedding
-        self.delay = delay
-        self.series_temporais = {}
-        self.estatisticas_referencia = {}
-        self.lock = threading.Lock()
-        logger.info(f"DetectorAnomaliasCaoticas inicializado com dimensão de embedding {dimensao_embedding}")
+    app = Flask(__name__)
     
-    def adicionar_ponto(self, nome: str, valor: float, timestamp: float):
-        """
-        Adiciona um ponto a uma série temporal.
-        
-        Args:
-            nome: Nome da série temporal
-            valor: Valor do ponto
-            timestamp: Timestamp do ponto
-        """
-        with self.lock:
-            if nome not in self.series_temporais:
-                self.series_temporais[nome] = []
-            
-            self.series_temporais[nome].append((timestamp, valor))
-            
-            # Mantém apenas os pontos mais recentes
-            if len(self.series_temporais[nome]) > self.janela_analise * 2:
-                self.series_temporais[nome] = self.series_temporais[nome][-self.janela_analise * 2:]
+    # Catálogo de padrões de anomalia
+    catalogo_anomalias = {}
     
-    def _reconstruir_espaco_fase(self, serie: List[float]) -> np.ndarray:
-        """
-        Reconstrói o espaço de fase de uma série temporal usando embedding por atraso.
-        
-        Args:
-            serie: Lista de valores da série temporal
-            
-        Returns:
-            Array 2D com pontos no espaço de fase
-        """
-        if len(serie) < self.dimensao_embedding * self.delay:
-            return np.array([])
-        
-        # Cria pontos no espaço de fase
-        pontos = []
-        for i in range(len(serie) - (self.dimensao_embedding - 1) * self.delay):
-            ponto = [serie[i + j * self.delay] for j in range(self.dimensao_embedding)]
-            pontos.append(ponto)
-        
-        return np.array(pontos)
+    # Motor de regras
+    motor_regras = MotorRegrasEspecialistas()
     
-    def _calcular_entropia_aproximada(self, serie: List[float], m: int = 2, r: float = 0.2) -> float:
-        """
-        Calcula a entropia aproximada de uma série temporal.
-        
-        Args:
-            serie: Lista de valores da série temporal
-            m: Dimensão de embedding
-            r: Tolerância (como fração do desvio padrão)
-            
-        Returns:
-            Valor de entropia aproximada
-        """
-        if len(serie) < 100:  # Mínimo de pontos para cálculo confiável
-            return 0.0
-        
-        # Normaliza série
-        serie_norm = np.array(serie)
-        std = np.std(serie_norm)
-        if std == 0:
-            return 0.0
-        
-        serie_norm = (serie_norm - np.mean(serie_norm)) / std
-        
-        # Calcula tolerância absoluta
-        r_abs = r * std
-        
-        # Função para contar padrões semelhantes
-        def _contar_padroes(m_val):
-            padroes = []
-            for i in range(len(serie_norm) - m_val + 1):
-                padroes.append(serie_norm[i:i+m_val])
-            
-            # Conta padrões semelhantes
-            contagens = []
-            for i, padrao_i in enumerate(padroes):
-                count = 0
-                for j, padrao_j in enumerate(padroes):
-                    if i != j and np.max(np.abs(padrao_i - padrao_j)) <= r_abs:
-                        count += 1
-                contagens.append(count / (len(padroes) - 1))
-            
-            return np.mean(np.log(contagens)) if contagens else 0
-        
-        # Calcula entropia aproximada
-        return abs(_contar_padroes(m) - _contar_padroes(m + 1))
+    # Rede neural
+    rede_neural = RedeNeuralHierarquica(["throughput", "erros", "latencia", "recursos"])
     
-    def _calcular_expoente_lyapunov(self, serie: List[float]) -> float:
-        """
-        Calcula uma aproximação do expoente de Lyapunov de uma série temporal.
-        
-        Args:
-            serie: Lista de valores da série temporal
-            
-        Returns:
-            Aproximação do expoente de Lyapunov
-        """
-        if len(serie) < 100:  # Mínimo de pontos para cálculo confiável
-            return 0.0
-        
-        # Reconstrói espaço de fase
-        pontos = self._reconstruir_espaco_fase(serie)
-        if len(pontos) < 10:
-            return 0.0
-        
-        # Calcula divergência entre pontos próximos
-        divergencias = []
-        num_pares = min(50, len(pontos) // 2)
-        
-        for _ in range(num_pares):
-            # Seleciona ponto aleatório
-            i = random.randint(0, len(pontos) - 2)
-            
-            # Encontra vizinho mais próximo
-            distancias = np.linalg.norm(pontos - pontos[i], axis=1)
-            distancias[i] = np.inf  # Exclui o próprio ponto
-            j = np.argmin(distancias)
-            
-            # Calcula divergência após alguns passos
-            passos = min(10, len(pontos) - max(i, j))
-            if passos <= 0:
-                continue
-            
-            d0 = distancias[j]
-            if d0 == 0:
-                continue
-            
-            d1 = np.linalg.norm(pontos[i + passos] - pontos[j + passos])
-            
-            # Evita divisão por zero
-            if d0 > 1e-10:
-                divergencia = np.log(d1 / d0) / passos
-                divergencias.append(divergencia)
-        
-        # Retorna média das divergências
-        return np.mean(divergencias) if divergencias else 0.0
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        return jsonify({"status": "healthy", "timestamp": time.time()})
     
-    def calcular_estatisticas_caoticas(self, nome: str) -> Dict[str, float]:
-        """
-        Calcula estatísticas caóticas para uma série temporal.
-        
-        Args:
-            nome: Nome da série temporal
+    @app.route('/api/diagnosticos', methods=['POST'])
+    def criar_diagnostico():
+        try:
+            data = request.json
             
-        Returns:
-            Dicionário com estatísticas caóticas
-        """
-        with self.lock:
-            if nome not in self.series_temporais or len(self.series_temporais[nome]) < self.janela_analise:
-                return {}
+            # Obtém métricas do monitoramento se não fornecidas
+            if 'metricas' not in data:
+                metricas = obter_metricas_do_monitoramento()
+            else:
+                metricas = []
+                for metrica_data in data['metricas']:
+                    metrica = MetricaDimensional(
+                        id=metrica_data["id"],
+                        nome=metrica_data["nome"],
+                        valor=metrica_data["valor"],
+                        timestamp=metrica_data["timestamp"],
+                        dimensao=metrica_data["dimensao"],
+                        unidade=metrica_data["unidade"],
+                        tags=metrica_data.get("tags", {}),
+                        metadados=metrica_data.get("metadados", {})
+                    )
+                    metricas.append(metrica)
             
-            # Extrai valores mais recentes
-            pontos = self.series_temporais[nome][-self.janela_analise:]
-            valores = [p[1] for p in pontos]
-            
-            # Calcula estatísticas
-            entropia = self._calcular_entropia_aproximada(valores)
-            expoente = self._calcular_expoente_lyapunov(valores)
-            
-            # Reconstrói espaço de fase
-            pontos_fase = self._reconstruir_espaco_fase(valores)
-            
-            # Calcula dimensão de correlação (aproximação)
-            dim_correlacao = 0.0
-            if len(pontos_fase) > 10:
-                # Calcula distâncias entre pontos
-                distancias = []
-                for i in range(len(pontos_fase)):
-                    for j in range(i + 1, len(pontos_fase)):
-                        distancias.append(np.linalg.norm(pontos_fase[i] - pontos_fase[j]))
-                
-                # Estima dimensão de correlação
-                if distancias:
-                    # Usa método de contagem de caixas
-                    raios = np.logspace(-2, 0, 10) * np.std(valores)
-                    contagens = []
-                    
-                    for r in raios:
-                        count = sum(1 for d in distancias if d < r)
-                        contagens.append(count / len(distancias))
-                    
-                    # Regressão log-log
-                    valid_idx = [i for i, c in enumerate(contagens) if c > 0]
-                    if len(valid_idx) > 1:
-                        log_raios = np.log(raios[valid_idx])
-                        log_contagens = np.log(np.array(contagens)[valid_idx])
-                        slope, _ = np.polyfit(log_raios, log_contagens, 1)
-                        dim_correlacao = abs(slope)
-            
-            # Calcula estatísticas adicionais
-            estatisticas = {
-                "entropia_aproximada": entropia,
-                "expoente_lyapunov": expoente,
-                "dimensao_correlacao": dim_correlacao,
-                "desvio_padrao": np.std(valores),
-                "curtose": stats.kurtosis(valores),
-                "assimetria": stats.skew(valores)
-            }
-            
-            return estatisticas
-    
-    def definir_referencia(self, nome: str):
-        """
-        Define as estatísticas atuais como referência para uma série temporal.
-        
-        Args:
-            nome: Nome da série temporal
-        """
-        with self.lock:
-            estatisticas = self.calcular_estatisticas_caoticas(nome)
-            if estatisticas:
-                self.estatisticas_referencia[nome] = estatisticas
-                logger.info(f"Estatísticas de referência definidas para série '{nome}'")
-    
-    def detectar_anomalia(self, nome: str, limiar: float = 2.0) -> Tuple[bool, Dict[str, float]]:
-        """
-        Detecta anomalias comparando estatísticas atuais com referência.
-        
-        Args:
-            nome: Nome da série temporal
-            limiar: Limiar de desvio para considerar anomalia
-            
-        Returns:
-            Tuple (anomalia_detectada, desvios)
-        """
-        with self.lock:
-            if nome not in self.series_temporais or len(self.series_temporais[nome]) < self.janela_analise:
-                return False, {}
-            
-            # Se não há referência, define a atual
-            if nome not in self.estatisticas_referencia:
-                self.definir_referencia(nome)
-                return False, {}
-            
-            # Calcula estatísticas atuais
-            estatisticas_atuais = self.calcular_estatisticas_caoticas(nome)
-            if not estatisticas_atuais:
-                return False, {}
-            
-            # Compara com referência
-            desvios = {}
-            for chave in estatisticas_atuais:
-                if chave in self.estatisticas_referencia[nome] and self.estatisticas_referencia[nome][chave] != 0:
-                    desvio = abs(estatisticas_atuais[chave] - self.estatisticas_referencia[nome][chave]) / abs(self.estatisticas_referencia[nome][chave])
-                    desvios[chave] = desvio
-            
-            # Verifica se algum desvio excede o limiar
-            anomalia = any(desvio > limiar for desvio in desvios.values())
-            
-            return anomalia, desvios
-
-
-class AnalisadorGradientes:
-    """
-    Monitora mudanças incrementais no comportamento do sistema.
-    
-    Como um sismógrafo cognitivo que detecta tremores sutis,
-    mapeia o relevo das variações graduais no comportamento do sistema,
-    revelando tendências emergentes antes que se tornem evidentes.
-    """
-    def __init__(self, janela_analise: int = 50, sobreposicao: int = 10):
-        self.janela_analise = janela_analise
-        self.sobreposicao = sobreposicao
-        self.series_temporais = {}
-        self.gradientes_historicos = {}
-        self.lock = threading.Lock()
-        logger.info(f"AnalisadorGradientes inicializado com janela de {janela_analise} e sobreposição de {sobreposicao}")
-    
-    def adicionar_ponto(self, nome: str, valor: float, timestamp: float):
-        """
-        Adiciona um ponto a uma série temporal.
-        
-        Args:
-            nome: Nome da série temporal
-            valor: Valor do ponto
-            timestamp: Timestamp do ponto
-        """
-        with self.lock:
-            if nome not in self.series_temporais:
-                self.series_temporais[nome] = []
-            
-            self.series_temporais[nome].append((timestamp, valor))
-            
-            # Mantém apenas os pontos mais recentes
-            max_pontos = self.janela_analise * 10  # Mantém histórico para análise de longo prazo
-            if len(self.series_temporais[nome]) > max_pontos:
-                self.series_temporais[nome] = self.series_temporais[nome][-max_pontos:]
-    
-    def _calcular_gradiente(self, pontos: List[Tuple[float, float]]) -> Dict[str, float]:
-        """
-        Calcula o gradiente de uma série de pontos.
-        
-        Args:
-            pontos: Lista de tuplas (timestamp, valor)
-            
-        Returns:
-            Dicionário com informações do gradiente
-        """
-        if len(pontos) < 2:
-            return {
-                "inclinacao": 0.0,
-                "r2": 0.0,
-                "erro_padrao": 0.0,
-                "p_valor": 1.0
-            }
-        
-        # Extrai timestamps e valores
-        timestamps = np.array([p[0] for p in pontos])
-        valores = np.array([p[1] for p in pontos])
-        
-        # Normaliza timestamps para começar de 0
-        timestamps = timestamps - timestamps[0]
-        
-        # Regressão linear
-        slope, intercept, r_value, p_value, std_err = stats.linregress(timestamps, valores)
-        
-        return {
-            "inclinacao": slope,
-            "r2": r_value ** 2,
-            "erro_padrao": std_err,
-            "p_valor": p_value
-        }
-    
-    def calcular_gradientes(self, nome: str) -> Dict[str, Dict[str, float]]:
-        """
-        Calcula gradientes em diferentes escalas temporais.
-        
-        Args:
-            nome: Nome da série temporal
-            
-        Returns:
-            Dicionário com gradientes em diferentes escalas
-        """
-        with self.lock:
-            if nome not in self.series_temporais or len(self.series_temporais[nome]) < self.janela_analise:
-                return {}
-            
-            # Ordena pontos por timestamp
-            pontos = sorted(self.series_temporais[nome], key=lambda p: p[0])
-            
-            # Calcula gradientes em diferentes janelas
-            gradientes = {}
-            
-            # Curto prazo: janela mais recente
-            curto_prazo = pontos[-self.janela_analise:]
-            gradientes["curto_prazo"] = self._calcular_gradiente(curto_prazo)
-            
-            # Médio prazo: 3 janelas
-            if len(pontos) >= self.janela_analise * 3:
-                medio_prazo = pontos[-self.janela_analise * 3:]
-                gradientes["medio_prazo"] = self._calcular_gradiente(medio_prazo)
-            
-            # Longo prazo: todos os pontos disponíveis
-            gradientes["longo_prazo"] = self._calcular_gradiente(pontos)
-            
-            # Calcula gradientes em janelas deslizantes
-            janelas_deslizantes = []
-            for i in range(0, len(pontos) - self.janela_analise + 1, self.sobreposicao):
-                janela = pontos[i:i + self.janela_analise]
-                janelas_deslizantes.append(janela)
-            
-            # Calcula gradiente para cada janela
-            gradientes_deslizantes = []
-            for janela in janelas_deslizantes:
-                gradiente = self._calcular_gradiente(janela)
-                timestamp_medio = sum(p[0] for p in janela) / len(janela)
-                gradientes_deslizantes.append((timestamp_medio, gradiente))
-            
-            # Armazena histórico de gradientes
-            if nome not in self.gradientes_historicos:
-                self.gradientes_historicos[nome] = []
-            
-            # Adiciona gradiente atual ao histórico
-            if gradientes_deslizantes:
-                self.gradientes_historicos[nome].append(gradientes_deslizantes[-1])
-            
-            # Mantém apenas os gradientes mais recentes
-            max_historico = 100
-            if len(self.gradientes_historicos[nome]) > max_historico:
-                self.gradientes_historicos[nome] = self.gradientes_historicos[nome][-max_historico:]
-            
-            # Adiciona informações de aceleração
-            if len(self.gradientes_historicos[nome]) >= 2:
-                # Calcula aceleração (mudança na inclinação)
-                ultimo_gradiente = self.gradientes_historicos[nome][-1][1]["inclinacao"]
-                penultimo_gradiente = self.gradientes_historicos[nome][-2][1]["inclinacao"]
-                delta_t = self.gradientes_historicos[nome][-1][0] - self.gradientes_historicos[nome][-2][0]
-                
-                if delta_t > 0:
-                    aceleracao = (ultimo_gradiente - penultimo_gradiente) / delta_t
-                    gradientes["aceleracao"] = aceleracao
-            
-            return gradientes
-    
-    def detectar_mudanca_tendencia(self, nome: str, limiar_confianca: float = 0.7) -> Tuple[bool, str, float]:
-        """
-        Detecta mudanças significativas na tendência.
-        
-        Args:
-            nome: Nome da série temporal
-            limiar_confianca: Limiar de confiança (R²) para considerar tendência significativa
-            
-        Returns:
-            Tuple (mudanca_detectada, direcao, confianca)
-        """
-        with self.lock:
-            if nome not in self.gradientes_historicos or len(self.gradientes_historicos[nome]) < 2:
-                return False, "estavel", 0.0
-            
-            # Obtém gradientes recentes
-            ultimo_gradiente = self.gradientes_historicos[nome][-1][1]
-            penultimo_gradiente = self.gradientes_historicos[nome][-2][1]
-            
-            # Verifica se ambos são significativos
-            if ultimo_gradiente["r2"] < limiar_confianca or penultimo_gradiente["r2"] < limiar_confianca:
-                return False, "estavel", max(ultimo_gradiente["r2"], penultimo_gradiente["r2"])
-            
-            # Verifica mudança de direção
-            if (ultimo_gradiente["inclinacao"] > 0 and penultimo_gradiente["inclinacao"] < 0) or \
-               (ultimo_gradiente["inclinacao"] < 0 and penultimo_gradiente["inclinacao"] > 0):
-                # Mudança de direção
-                direcao = "crescente" if ultimo_gradiente["inclinacao"] > 0 else "decrescente"
-                return True, direcao, ultimo_gradiente["r2"]
-            
-            # Verifica aceleração significativa
-            delta_inclinacao = abs(ultimo_gradiente["inclinacao"] - penultimo_gradiente["inclinacao"])
-            inclinacao_media = (abs(ultimo_gradiente["inclinacao"]) + abs(penultimo_gradiente["inclinacao"])) / 2
-            
-            if inclinacao_media > 0 and delta_inclinacao / inclinacao_media > 0.5:
-                # Aceleração significativa
-                direcao = "acelerando" if abs(ultimo_gradiente["inclinacao"]) > abs(penultimo_gradiente["inclinacao"]) else "desacelerando"
-                return True, direcao, ultimo_gradiente["r2"]
-            
-            return False, "estavel", ultimo_gradiente["r2"]
-
-
-class DiagnosticadorCognitivo:
-    """
-    Coordena os diferentes componentes de diagnóstico para produzir análises integradas.
-    
-    Como um maestro que rege a orquestra de análises,
-    harmoniza os insights de diferentes instrumentos analíticos,
-    compondo uma sinfonia de compreensão que transcende as partes individuais.
-    """
-    def __init__(self):
-        self.motor_regras = MotorRegrasEspecialistas()
-        self.rede_neural = None
-        self.detector_anomalias = DetectorAnomaliasCaoticas()
-        self.analisador_gradientes = AnalisadorGradientes()
-        self.catalogo_anomalias = {}
-        self.diagnosticos_recentes = deque(maxlen=100)
-        self.lock = threading.Lock()
-        logger.info("DiagnosticadorCognitivo inicializado")
-    
-    def inicializar_rede_neural(self, dimensoes_entrada: List[str], camadas_ocultas: List[int] = None):
-        """
-        Inicializa a rede neural hierárquica.
-        
-        Args:
-            dimensoes_entrada: Lista de dimensões de entrada
-            camadas_ocultas: Lista de tamanhos das camadas ocultas
-        """
-        self.rede_neural = RedeNeuralHierarquica(dimensoes_entrada, camadas_ocultas)
-        logger.info("Rede neural hierárquica inicializada")
-    
-    def registrar_padrao_anomalia(self, padrao: PadraoAnomalia):
-        """
-        Registra um padrão de anomalia no catálogo.
-        
-        Args:
-            padrao: Padrão de anomalia a ser registrado
-        """
-        with self.lock:
-            self.catalogo_anomalias[padrao.id] = padrao
-            logger.info(f"Padrão de anomalia '{padrao.id}' registrado")
-    
-    def processar_metricas(self, metricas: List[MetricaDimensional]) -> Diagnostico:
-        """
-        Processa um conjunto de métricas e gera um diagnóstico.
-        
-        Args:
-            metricas: Lista de métricas para análise
-            
-        Returns:
-            Diagnóstico gerado
-        """
-        with self.lock:
-            # Gera ID único para o diagnóstico
-            diagnostico_id = f"diag_{int(time.time())}_{random.randint(1000, 9999)}"
-            
-            # Contexto inicial
-            contexto = {
-                "timestamp": time.time(),
-                "num_metricas": len(metricas)
-            }
-            
-            # Processa métricas por dimensão
-            metricas_por_dimensao = {}
-            for metrica in metricas:
-                if metrica.dimensao not in metricas_por_dimensao:
-                    metricas_por_dimensao[metrica.dimensao] = []
-                metricas_por_dimensao[metrica.dimensao].append(metrica)
-            
-            # Atualiza séries temporais para análise de gradientes e caos
-            for metrica in metricas:
-                nome_serie = f"{metrica.dimensao}:{metrica.nome}"
-                self.detector_anomalias.adicionar_ponto(nome_serie, metrica.valor, metrica.timestamp)
-                self.analisador_gradientes.adicionar_ponto(nome_serie, metrica.valor, metrica.timestamp)
-            
-            # Executa motor de regras
-            resultados_regras = self.motor_regras.executar(metricas, contexto)
+            # Contexto para diagnóstico
+            contexto = data.get('contexto', {})
             
             # Detecta anomalias
             anomalias_detectadas = []
             
-            # Verifica cada padrão de anomalia
-            for padrao_id, padrao in self.catalogo_anomalias.items():
+            for padrao_id, padrao in catalogo_anomalias.items():
                 corresponde, confianca = padrao.corresponde(metricas, contexto)
                 if corresponde:
                     anomalias_detectadas.append((padrao, confianca))
             
-            # Ordena anomalias por confiança
-            anomalias_detectadas.sort(key=lambda x: x[1], reverse=True)
-            
-            # Analisa gradientes para métricas relevantes
-            gradientes = {}
-            for metrica in metricas:
-                nome_serie = f"{metrica.dimensao}:{metrica.nome}"
-                grad = self.analisador_gradientes.calcular_gradientes(nome_serie)
-                if grad:
-                    gradientes[nome_serie] = grad
-            
-            # Detecta comportamentos caóticos
-            caos = {}
-            for metrica in metricas:
-                nome_serie = f"{metrica.dimensao}:{metrica.nome}"
-                anomalia, desvios = self.detector_anomalias.detectar_anomalia(nome_serie)
-                if anomalia:
-                    caos[nome_serie] = desvios
-            
-            # Enriquece contexto com análises adicionais
-            contexto["gradientes"] = gradientes
-            contexto["caos"] = caos
-            
-            # Identifica causa raiz (implementação simplificada)
-            causa_raiz = None
-            confianca_causa = 0.0
-            
-            if anomalias_detectadas:
-                # Usa a anomalia mais confiável como causa raiz
-                causa_raiz = f"Anomalia detectada: {anomalias_detectadas[0][0].nome}"
-                confianca_causa = anomalias_detectadas[0][1]
-            
-            # Gera recomendações (implementação simplificada)
-            recomendacoes = []
-            
-            if anomalias_detectadas:
-                for anomalia, conf in anomalias_detectadas[:3]:  # Top 3 anomalias
-                    recomendacoes.append(f"Investigar {anomalia.nome} (confiança: {conf:.2f})")
-            
             # Cria diagnóstico
+            diagnostico_id = f"diag_{int(time.time())}_{random.randint(1000, 9999)}"
+            
             diagnostico = Diagnostico(
                 id=diagnostico_id,
                 timestamp=time.time(),
                 anomalias_detectadas=anomalias_detectadas,
-                metricas_analisadas=metricas,
-                causa_raiz=causa_raiz,
-                confianca=confianca_causa,
-                recomendacoes=recomendacoes,
+                metricas_analisadas=[m.id for m in metricas],
                 contexto=contexto
             )
             
-            # Armazena diagnóstico no histórico
-            self.diagnosticos_recentes.append(diagnostico)
+            # Executa regras para enriquecer diagnóstico
+            resultados_regras = motor_regras.executar(metricas, contexto)
             
-            logger.info(f"Diagnóstico {diagnostico_id} gerado com {len(anomalias_detectadas)} anomalias detectadas")
+            # Adiciona recomendações das regras
+            for resultado in resultados_regras:
+                if isinstance(resultado, str):
+                    diagnostico.recomendacoes.append(resultado)
+                elif isinstance(resultado, dict) and "recomendacao" in resultado:
+                    diagnostico.recomendacoes.append(resultado["recomendacao"])
             
-            return diagnostico
-    
-    def obter_diagnostico(self, diagnostico_id: str) -> Optional[Diagnostico]:
-        """
-        Obtém um diagnóstico pelo ID.
-        
-        Args:
-            diagnostico_id: ID do diagnóstico
+            return jsonify(diagnostico.to_dict()), 200
             
-        Returns:
-            Diagnóstico ou None se não encontrado
-        """
-        with self.lock:
-            for diagnostico in self.diagnosticos_recentes:
-                if diagnostico.id == diagnostico_id:
-                    return diagnostico
-            
-            return None
-    
-    def salvar_diagnostico(self, diagnostico: Diagnostico, caminho: str):
-        """
-        Salva um diagnóstico em arquivo.
-        
-        Args:
-            diagnostico: Diagnóstico a ser salvo
-            caminho: Caminho do arquivo
-        """
-        with open(caminho, 'w') as f:
-            json.dump(diagnostico.to_dict(), f, indent=2)
-        
-        logger.info(f"Diagnóstico {diagnostico.id} salvo em {caminho}")
-    
-    def carregar_diagnostico(self, caminho: str) -> Optional[Diagnostico]:
-        """
-        Carrega um diagnóstico de arquivo.
-        
-        Args:
-            caminho: Caminho do arquivo
-            
-        Returns:
-            Diagnóstico carregado ou None se falhar
-        """
-        try:
-            with open(caminho, 'r') as f:
-                dados = json.load(f)
-            
-            diagnostico = Diagnostico.from_dict(dados, self.catalogo_anomalias)
-            logger.info(f"Diagnóstico {diagnostico.id} carregado de {caminho}")
-            
-            return diagnostico
-        
         except Exception as e:
-            logger.error(f"Erro ao carregar diagnóstico: {str(e)}")
-            return None
-
-
-# Exemplo de uso
-if __name__ == "__main__":
-    # Cria diagnosticador
-    diagnosticador = DiagnosticadorCognitivo()
+            logger.error(f"Erro ao criar diagnóstico: {e}")
+            return jsonify({"error": str(e)}), 500
     
-    # Inicializa rede neural
-    diagnosticador.inicializar_rede_neural(["throughput", "erros", "latencia", "recursos"])
+    @app.route('/api/diagnosticos/<diagnostico_id>', methods=['GET'])
+    def obter_diagnostico(diagnostico_id):
+        # Implementação simplificada - em um sistema real, buscaria do banco de dados
+        return jsonify({
+            "id": diagnostico_id,
+            "timestamp": time.time(),
+            "anomalias_detectadas": [],
+            "metricas_analisadas": [],
+            "causa_raiz": None,
+            "confianca": 0.0,
+            "recomendacoes": [],
+            "contexto": {}
+        }), 200
     
-    # Registra padrões de anomalia
-    padrao_latencia = PadraoAnomalia(
-        id="latencia_alta",
-        nome="Latência elevada",
-        dimensoes=["latencia"],
-        metricas_relacionadas=["api_latencia_p95", "api_latencia_media"],
-        limiar_confianca=0.7,
-        descricao="Padrão de latência elevada nas APIs"
-    )
-    
-    padrao_erros = PadraoAnomalia(
-        id="erros_http",
-        nome="Taxa de erros HTTP elevada",
-        dimensoes=["erros"],
-        metricas_relacionadas=["api_errors_http"],
-        limiar_confianca=0.6,
-        descricao="Padrão de erros HTTP acima do normal"
-    )
-    
-    diagnosticador.registrar_padrao_anomalia(padrao_latencia)
-    diagnosticador.registrar_padrao_anomalia(padrao_erros)
-    
-    # Simula métricas
-    metricas = [
-        MetricaDimensional(
-            nome="api_latencia_p95",
-            valor=450.0,  # Valor alto
-            timestamp=time.time(),
-            contexto={"endpoint": "/api/data"},
-            dimensao="latencia",
-            unidade="ms"
-        ),
-        MetricaDimensional(
-            nome="api_latencia_media",
-            valor=120.0,
-            timestamp=time.time(),
-            contexto={"endpoint": "/api/data"},
-            dimensao="latencia",
-            unidade="ms"
-        ),
-        MetricaDimensional(
-            nome="api_errors_http",
-            valor=15,
-            timestamp=time.time(),
-            contexto={"categoria": "http"},
-            dimensao="erros",
-            unidade="contagem"
-        ),
-        MetricaDimensional(
-            nome="api_requests_media_movel",
-            valor=250.0,
-            timestamp=time.time(),
-            contexto={"tipo": "media_movel", "janela": 10},
-            dimensao="throughput",
-            unidade="ops/s"
-        )
-    ]
-    
-    # Gera diagnóstico
-    diagnostico = diagnosticador.processar_metricas(metricas)
-    
-    # Imprime resultado
-    print(f"Diagnóstico: {diagnostico.id}")
-    print(f"Anomalias detectadas: {len(diagnostico.anomalias_detectadas)}")
-    
-    for anomalia, confianca in diagnostico.anomalias_detectadas:
-        print(f"- {anomalia.nome}: {confianca:.2f}")
-    
-    print(f"Causa raiz: {diagnostico.causa_raiz} (confiança: {diagnostico.confianca:.2f})")
-    print("Recomendações:")
-    for rec in diagnostico.recomendacoes:
-        print(f"- {rec}")
+    # Inicia o servidor
+    app.run(host='0.0.0.0', port=8080)

@@ -1,22 +1,31 @@
 FROM golang:1.18-alpine AS builder
 
-WORKDIR /app
+WORKDIR /workspace
 
-# 1. Copia arquivos de dependências
+# Copiar arquivos Go Modules
 COPY go.mod go.sum ./
-# 2. Baixa e sincroniza dependências
-RUN go mod download && go mod tidy
+RUN go mod download
 
-# 3. Copia o código-fonte
-COPY . .
+# Copiar o código-fonte
+COPY main.go main.go
+COPY api/ api/
+COPY controllers/ controllers/
 
-# 4. Compila o projeto (AGORA na raiz, pois main.go foi movido)
-RUN go build -o healing-operator ./main.go
+# Instalar controller-gen
+RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
 
-# 5. Etapa de execução leve
+# Gerar código CRD e DeepCopy
+RUN controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+RUN controller-gen crd paths="./..." output:crd:artifacts:config=config/crd/bases
+
+# Compilar
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
+
+# Imagem final
 FROM alpine:3.16
-WORKDIR /app
-COPY --from=builder /app/healing-operator .
 
-EXPOSE 8080
-CMD ["./healing-operator"]
+WORKDIR /
+COPY --from=builder /workspace/manager .
+USER 65532:65532
+
+ENTRYPOINT ["/manager"]

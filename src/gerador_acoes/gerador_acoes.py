@@ -15,10 +15,7 @@ from datetime import datetime
 import copy
 import uuid
 from enum import Enum, auto
-
-# Importação dos módulos anteriores
-from monitoramento.monitoramento import MetricaDimensional
-from diagnostico.diagnostico import Diagnostico, PadraoAnomalia
+import requests
 
 # Configuração de logging
 logging.basicConfig(
@@ -27,6 +24,138 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("GeradorAcoesEmergentes")
+
+# Classes locais para substituir importações diretas
+@dataclass
+class MetricaDimensional:
+    """Classe local que substitui a importação de monitoramento.monitoramento.MetricaDimensional"""
+    id: str
+    nome: str
+    valor: float
+    timestamp: float
+    dimensao: str
+    unidade: str
+    tags: Dict[str, str] = field(default_factory=dict)
+    metadados: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class PadraoAnomalia:
+    """Classe local que substitui a importação de diagnostico.diagnostico.PadraoAnomalia"""
+    id: str
+    nome: str
+    dimensoes: List[str]
+    descricao: str
+    severidade: float
+    
+@dataclass
+class Diagnostico:
+    """Classe local que substitui a importação de diagnostico.diagnostico.Diagnostico"""
+    id: str
+    timestamp: float
+    anomalias_detectadas: List[Tuple[PadraoAnomalia, float]]
+    metricas_analisadas: List[str]
+    contexto: Dict[str, Any] = field(default_factory=dict)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Diagnostico':
+        """Cria uma instância de Diagnostico a partir de um dicionário."""
+        anomalias = []
+        for anom_data in data.get("anomalias_detectadas", []):
+            padrao = PadraoAnomalia(
+                id=anom_data["anomalia"]["id"],
+                nome=anom_data["anomalia"]["nome"],
+                dimensoes=anom_data["anomalia"]["dimensoes"],
+                descricao=anom_data["anomalia"].get("descricao", ""),
+                severidade=anom_data["anomalia"].get("severidade", 0.5)
+            )
+            confianca = anom_data["confianca"]
+            anomalias.append((padrao, confianca))
+            
+        return cls(
+            id=data["id"],
+            timestamp=data["timestamp"],
+            anomalias_detectadas=anomalias,
+            metricas_analisadas=data.get("metricas_analisadas", []),
+            contexto=data.get("contexto", {})
+        )
+
+# Funções para comunicação com outros serviços
+def obter_metricas_do_monitoramento(metrica_id=None):
+    """
+    Obtém métricas do serviço de monitoramento via API REST.
+    
+    Args:
+        metrica_id: ID opcional da métrica específica
+        
+    Returns:
+        Lista de métricas ou uma métrica específica
+    """
+    try:
+        base_url = "http://monitoramento:8080/api/metricas"
+        if metrica_id:
+            url = f"{base_url}/{metrica_id}"
+        else:
+            url = base_url
+            
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if metrica_id:
+            # Retorna uma única métrica
+            return MetricaDimensional(
+                id=data["id"],
+                nome=data["nome"],
+                valor=data["valor"],
+                timestamp=data["timestamp"],
+                dimensao=data["dimensao"],
+                unidade=data["unidade"],
+                tags=data.get("tags", {}),
+                metadados=data.get("metadados", {})
+            )
+        else:
+            # Retorna lista de métricas
+            metricas = []
+            for item in data:
+                metrica = MetricaDimensional(
+                    id=item["id"],
+                    nome=item["nome"],
+                    valor=item["valor"],
+                    timestamp=item["timestamp"],
+                    dimensao=item["dimensao"],
+                    unidade=item["unidade"],
+                    tags=item.get("tags", {}),
+                    metadados=item.get("metadados", {})
+                )
+                metricas.append(metrica)
+            return metricas
+            
+    except Exception as e:
+        logger.error(f"Erro ao obter métricas do monitoramento: {e}")
+        return []
+
+def obter_diagnostico(diagnostico_id):
+    """
+    Obtém um diagnóstico do serviço de diagnóstico via API REST.
+    
+    Args:
+        diagnostico_id: ID do diagnóstico
+        
+    Returns:
+        Objeto Diagnostico ou None se ocorrer erro
+    """
+    try:
+        url = f"http://diagnostico:8080/api/diagnosticos/{diagnostico_id}"
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        
+        data = response.json()
+        return Diagnostico.from_dict(data)
+        
+    except Exception as e:
+        logger.error(f"Erro ao obter diagnóstico: {e}")
+        return None
 
 class TipoAcao(Enum):
     """
@@ -441,49 +570,24 @@ class MotorRefatoracao:
                         if not anomalias_requeridas.issubset(anomalias_presentes):
                             aplicavel = False
                     
-                    # Verifica condições de métricas
-                    if "metricas" in padrao["condicoes"] and aplicavel:
-                        for metrica_cond in padrao["condicoes"]["metricas"]:
-                            nome_metrica = metrica_cond["nome"]
-                            operador = metrica_cond["operador"]
-                            valor_limiar = metrica_cond["valor"]
-                            
-                            # Busca métrica no diagnóstico
-                            metrica_encontrada = False
-                            for metrica in diagnostico.metricas_analisadas:
-                                if metrica.nome == nome_metrica:
-                                    metrica_encontrada = True
-                                    
-                                    # Verifica condição
-                                    if operador == "gt" and not (metrica.valor > valor_limiar):
-                                        aplicavel = False
-                                    elif operador == "lt" and not (metrica.valor < valor_limiar):
-                                        aplicavel = False
-                                    elif operador == "eq" and not (metrica.valor == valor_limiar):
-                                        aplicavel = False
-                                    elif operador == "ne" and not (metrica.valor != valor_limiar):
-                                        aplicavel = False
-                                    
-                                    break
-                            
-                            if not metrica_encontrada:
-                                aplicavel = False
-                    
                     # Verifica condições de contexto
-                    if "contexto" in padrao["condicoes"] and aplicavel:
+                    if "contexto" in padrao["condicoes"]:
                         for chave, valor in padrao["condicoes"]["contexto"].items():
                             if chave not in diagnostico.contexto or diagnostico.contexto[chave] != valor:
                                 aplicavel = False
                                 break
-                
-                if aplicavel:
+                    
+                    if aplicavel:
+                        aplicaveis.append(nome)
+                else:
+                    # Se não houver condições específicas, considera aplicável
                     aplicaveis.append(nome)
         
         return aplicaveis
     
     def _gerar_acao_refatoracao(self, nome_padrao: str, diagnostico: Diagnostico) -> AcaoCorretiva:
         """
-        Gera uma ação de refatoração baseada em um padrão.
+        Gera uma ação de refatoração com base em um padrão.
         
         Args:
             nome_padrao: Nome do padrão de refatoração
@@ -522,9 +626,9 @@ class MotorRefatoracao:
                 descricao=padrao.get("descricao", f"Refatoração usando padrão {nome_padrao}"),
                 comandos=comandos,
                 impacto_estimado=padrao.get("impacto_estimado", {}),
-                tempo_estimado=padrao.get("tempo_estimado", 300),
+                tempo_estimado=padrao.get("tempo_estimado", 300),  # Refatorações geralmente levam mais tempo
                 recursos_necessarios=padrao.get("recursos_necessarios", {}),
-                prioridade=padrao.get("prioridade", 0.5),
+                prioridade=padrao.get("prioridade", 0.5),  # Prioridade média por padrão
                 dependencias=padrao.get("dependencias", []),
                 risco=padrao.get("risco", 0.5),
                 reversivel=padrao.get("reversivel", True),
@@ -560,128 +664,124 @@ class MotorRefatoracao:
         return acoes
 
 
-class ProjetistaEvolutivo:
+class ProjetorRedesign:
     """
-    Cria estratégias de redesign profundo.
+    Projeta transformações profundas para evolução do sistema.
     
-    Como um visionário que enxerga além das limitações atuais,
-    concebe transformações fundamentais que transcendem o presente,
-    plantando sementes de evolução que florescerão no futuro.
+    Como um visionário que enxerga além do horizonte do presente,
+    concebe futuros alternativos onde as limitações atuais são transcendidas,
+    traçando caminhos evolutivos que conduzem a novos patamares de capacidade.
     """
     def __init__(self):
-        self.estrategias_evolutivas = {}
-        self.historico_evolucoes = []
+        self.modelos_redesign = {}
+        self.historico_projetos = []
         self.lock = threading.Lock()
-        logger.info("ProjetistaEvolutivo inicializado")
+        logger.info("ProjetorRedesign inicializado")
     
-    def registrar_estrategia(self, nome: str, estrategia: Dict[str, Any]):
+    def registrar_modelo(self, nome: str, modelo: Dict[str, Any]):
         """
-        Registra uma estratégia evolutiva.
+        Registra um modelo de redesign.
         
         Args:
-            nome: Nome identificador da estratégia
-            estrategia: Dicionário com informações da estratégia
+            nome: Nome identificador do modelo
+            modelo: Dicionário com informações do modelo
         """
         with self.lock:
-            self.estrategias_evolutivas[nome] = estrategia
-            logger.info(f"Estratégia evolutiva '{nome}' registrada")
+            self.modelos_redesign[nome] = modelo
+            logger.info(f"Modelo de redesign '{nome}' registrado")
     
-    def registrar_evolucao(self, nome_estrategia: str, resultado: Dict[str, Any]):
+    def registrar_projeto(self, nome_modelo: str, resultado: Dict[str, Any]):
         """
-        Registra o resultado de uma evolução.
+        Registra o resultado de um projeto de redesign.
         
         Args:
-            nome_estrategia: Nome da estratégia aplicada
+            nome_modelo: Nome do modelo aplicado
             resultado: Dicionário com informações do resultado
         """
         with self.lock:
-            self.historico_evolucoes.append({
-                "estrategia": nome_estrategia,
+            self.historico_projetos.append({
+                "modelo": nome_modelo,
                 "resultado": resultado,
                 "timestamp": time.time()
             })
     
-    def _avaliar_necessidade_evolucao(self, diagnostico: Diagnostico) -> Dict[str, float]:
+    def _avaliar_aplicabilidade(self, modelo: Dict[str, Any], diagnostico: Diagnostico) -> Tuple[bool, float]:
         """
-        Avalia a necessidade de evolução com base no diagnóstico.
+        Avalia a aplicabilidade de um modelo de redesign ao diagnóstico atual.
         
         Args:
+            modelo: Modelo de redesign
             diagnostico: Diagnóstico atual
             
         Returns:
-            Dicionário com scores de necessidade para cada estratégia
+            Tuple (aplicável, score)
         """
-        scores = {}
+        # Verifica condições de aplicabilidade
+        if "condicoes" in modelo:
+            # Verifica padrões de anomalias recorrentes
+            if "anomalias_recorrentes" in modelo["condicoes"]:
+                # Em um sistema real, verificaria o histórico de anomalias
+                # Aqui, simplificamos assumindo que todas as anomalias no diagnóstico são recorrentes
+                anomalias_requeridas = set(modelo["condicoes"]["anomalias_recorrentes"])
+                anomalias_presentes = set(a.id for a, _ in diagnostico.anomalias_detectadas)
+                
+                if not anomalias_requeridas.issubset(anomalias_presentes):
+                    return False, 0.0
+            
+            # Verifica condições de contexto
+            if "contexto" in modelo["condicoes"]:
+                for chave, valor in modelo["condicoes"]["contexto"].items():
+                    if chave not in diagnostico.contexto or diagnostico.contexto[chave] != valor:
+                        return False, 0.0
         
-        with self.lock:
-            for nome, estrategia in self.estrategias_evolutivas.items():
-                score = 0.0
+        # Calcula score de aplicabilidade
+        score = 0.5  # Valor padrão
+        
+        # Ajusta score com base em fatores específicos
+        if "fatores_score" in modelo:
+            for fator in modelo["fatores_score"]:
+                if fator["tipo"] == "anomalia_presente":
+                    # Verifica se anomalia específica está presente
+                    for anomalia, conf in diagnostico.anomalias_detectadas:
+                        if anomalia.id == fator["anomalia_id"]:
+                            score += fator.get("ajuste", 0.1) * conf
+                            break
                 
-                # Verifica padrões de anomalias recorrentes
-                if "anomalias_alvo" in estrategia:
-                    anomalias_alvo = set(estrategia["anomalias_alvo"])
-                    anomalias_presentes = set(a.id for a, _ in diagnostico.anomalias_detectadas)
-                    
-                    # Calcula interseção
-                    interseção = anomalias_alvo.intersection(anomalias_presentes)
-                    
-                    if interseção:
-                        # Aumenta score baseado na quantidade de anomalias alvo presentes
-                        score += len(interseção) / len(anomalias_alvo) * 0.5
-                
-                # Verifica tendências de métricas
-                if "tendencias_metricas" in estrategia and "gradientes" in diagnostico.contexto:
-                    for tendencia in estrategia["tendencias_metricas"]:
-                        nome_metrica = tendencia["metrica"]
-                        direcao = tendencia["direcao"]
+                elif fator["tipo"] == "contexto":
+                    # Verifica valor de contexto
+                    chave = fator["chave"]
+                    if chave in diagnostico.contexto:
+                        valor = diagnostico.contexto[chave]
+                        valor_esperado = fator["valor"]
                         
-                        # Verifica se há informação de gradiente para esta métrica
-                        for nome_serie, grad in diagnostico.contexto["gradientes"].items():
-                            if nome_metrica in nome_serie:
-                                if "curto_prazo" in grad and "medio_prazo" in grad:
-                                    # Verifica direção dos gradientes
-                                    grad_curto = grad["curto_prazo"]["inclinacao"]
-                                    grad_medio = grad["medio_prazo"]["inclinacao"]
-                                    
-                                    if direcao == "crescente" and grad_curto > 0 and grad_medio > 0:
-                                        score += 0.3
-                                    elif direcao == "decrescente" and grad_curto < 0 and grad_medio < 0:
-                                        score += 0.3
-                
-                # Verifica histórico de evoluções
-                evolucoes_anteriores = [e for e in self.historico_evolucoes if e["estrategia"] == nome]
-                if evolucoes_anteriores:
-                    # Penaliza estratégias recentemente aplicadas
-                    ultima_aplicacao = max(e["timestamp"] for e in evolucoes_anteriores)
-                    tempo_desde_ultima = time.time() - ultima_aplicacao
-                    
-                    # Se aplicada há menos de 7 dias, reduz score
-                    if tempo_desde_ultima < 7 * 24 * 3600:
-                        score *= (tempo_desde_ultima / (7 * 24 * 3600))
-                
-                scores[nome] = min(1.0, score)  # Limita score a 1.0
+                        if valor == valor_esperado:
+                            score += fator.get("ajuste", 0.1)
         
-        return scores
+        # Limita score entre 0 e 1
+        score = max(0.0, min(1.0, score))
+        
+        return True, score
     
-    def _gerar_acao_evolutiva(self, nome_estrategia: str, diagnostico: Diagnostico) -> AcaoCorretiva:
+    def _gerar_acao_redesign(self, nome_modelo: str, diagnostico: Diagnostico, score: float) -> AcaoCorretiva:
         """
-        Gera uma ação evolutiva baseada em uma estratégia.
+        Gera uma ação de redesign com base em um modelo.
         
         Args:
-            nome_estrategia: Nome da estratégia evolutiva
+            nome_modelo: Nome do modelo de redesign
             diagnostico: Diagnóstico atual
+            score: Score de aplicabilidade
             
         Returns:
             Ação corretiva gerada
         """
         with self.lock:
-            estrategia = self.estrategias_evolutivas[nome_estrategia]
+            modelo = self.modelos_redesign[nome_modelo]
             
             # Gera ID único para a ação
-            acao_id = f"evol_{int(time.time())}_{random.randint(1000, 9999)}"
+            acao_id = f"redesign_{int(time.time())}_{random.randint(1000, 9999)}"
             
-            # Copia comandos da estratégia
-            comandos = copy.deepcopy(estrategia.get("comandos", []))
+            # Copia comandos do modelo
+            comandos = copy.deepcopy(modelo.get("comandos", []))
             
             # Substitui variáveis nos comandos
             for i, cmd in enumerate(comandos):
@@ -701,354 +801,71 @@ class ProjetistaEvolutivo:
             acao = AcaoCorretiva(
                 id=acao_id,
                 tipo=TipoAcao.REDESIGN,
-                descricao=estrategia.get("descricao", f"Evolução usando estratégia {nome_estrategia}"),
+                descricao=modelo.get("descricao", f"Redesign usando modelo {nome_modelo}"),
                 comandos=comandos,
-                impacto_estimado=estrategia.get("impacto_estimado", {}),
-                tempo_estimado=estrategia.get("tempo_estimado", 1800),  # 30 minutos por padrão
-                recursos_necessarios=estrategia.get("recursos_necessarios", {}),
-                prioridade=estrategia.get("prioridade", 0.3),  # Prioridade mais baixa por padrão
-                dependencias=estrategia.get("dependencias", []),
-                risco=estrategia.get("risco", 0.7),  # Risco mais alto por padrão
-                reversivel=estrategia.get("reversivel", False),  # Menos reversível por padrão
+                impacto_estimado=modelo.get("impacto_estimado", {}),
+                tempo_estimado=modelo.get("tempo_estimado", 1800),  # Redesigns geralmente levam mais tempo
+                recursos_necessarios=modelo.get("recursos_necessarios", {}),
+                prioridade=modelo.get("prioridade", 0.3) * score,  # Ajusta prioridade pelo score
+                dependencias=modelo.get("dependencias", []),
+                risco=modelo.get("risco", 0.7),  # Redesigns geralmente têm mais risco
+                reversivel=modelo.get("reversivel", False),  # Redesigns geralmente não são facilmente reversíveis
                 contexto={
                     "diagnostico_id": diagnostico.id,
-                    "estrategia": nome_estrategia,
+                    "modelo": nome_modelo,
+                    "score": score,
                     "timestamp": time.time()
                 }
             )
             
             return acao
     
-    def gerar_acoes(self, diagnostico: Diagnostico, limiar_score: float = 0.6) -> List[AcaoCorretiva]:
+    def gerar_acoes(self, diagnostico: Diagnostico) -> List[AcaoCorretiva]:
         """
-        Gera ações evolutivas com base no diagnóstico atual.
+        Gera ações de redesign com base no diagnóstico atual.
         
         Args:
             diagnostico: Diagnóstico atual
-            limiar_score: Score mínimo para gerar ação
             
         Returns:
             Lista de ações corretivas geradas
         """
         acoes = []
         
-        # Avalia necessidade de evolução
-        scores = self._avaliar_necessidade_evolucao(diagnostico)
-        
-        # Gera ações para estratégias com score acima do limiar
-        for nome_estrategia, score in scores.items():
-            if score >= limiar_score:
-                acao = self._gerar_acao_evolutiva(nome_estrategia, diagnostico)
-                acoes.append(acao)
-        
-        return acoes
-
-
-class OrquestradorPrioridades:
-    """
-    Implementa algoritmo genético para seleção de estratégias.
-    
-    Como um maestro que harmoniza vozes dissonantes,
-    orquestra a sinfonia de ações corretivas,
-    encontrando o equilíbrio perfeito entre urgência e impacto.
-    """
-    def __init__(self, tamanho_populacao: int = 50, geracoes: int = 20):
-        self.tamanho_populacao = tamanho_populacao
-        self.geracoes = geracoes
-        self.pesos_objetivos = {
-            "eficacia": 0.4,
-            "risco": 0.3,
-            "tempo": 0.2,
-            "recursos": 0.1
-        }
-        logger.info(f"OrquestradorPrioridades inicializado com população {tamanho_populacao} e {geracoes} gerações")
-    
-    def _gerar_populacao_inicial(self, acoes: List[AcaoCorretiva]) -> List[List[int]]:
-        """
-        Gera população inicial de planos de ação.
-        
-        Args:
-            acoes: Lista de ações disponíveis
-            
-        Returns:
-            Lista de planos (cada plano é uma lista de índices de ações)
-        """
-        populacao = []
-        
-        # Gera planos aleatórios
-        for _ in range(self.tamanho_populacao):
-            # Decide quais ações incluir
-            plano = []
-            for i in range(len(acoes)):
-                if random.random() < 0.5:  # 50% de chance de incluir cada ação
-                    plano.append(i)
-            
-            # Garante que o plano não está vazio
-            if not plano and acoes:
-                plano.append(random.randint(0, len(acoes) - 1))
-            
-            populacao.append(plano)
-        
-        return populacao
-    
-    def _avaliar_plano(self, plano: List[int], acoes: List[AcaoCorretiva]) -> Dict[str, float]:
-        """
-        Avalia um plano de ação em múltiplos objetivos.
-        
-        Args:
-            plano: Lista de índices de ações
-            acoes: Lista de ações disponíveis
-            
-        Returns:
-            Dicionário com scores para cada objetivo
-        """
-        if not plano:
-            return {
-                "eficacia": 0.0,
-                "risco": 0.0,
-                "tempo": 0.0,
-                "recursos": 0.0,
-                "total": 0.0
-            }
-        
-        # Extrai ações do plano
-        acoes_plano = [acoes[i] for i in plano]
-        
-        # Calcula eficácia (impacto estimado)
-        impacto_combinado = {}
-        for acao in acoes_plano:
-            for dim, impacto in acao.impacto_estimado.items():
-                if dim not in impacto_combinado:
-                    impacto_combinado[dim] = 0.0
+        # Avalia aplicabilidade de cada modelo
+        with self.lock:
+            for nome_modelo, modelo in self.modelos_redesign.items():
+                aplicavel, score = self._avaliar_aplicabilidade(modelo, diagnostico)
                 
-                # Combina impactos (evita ultrapassar 1.0)
-                impacto_atual = impacto_combinado[dim]
-                impacto_combinado[dim] = impacto_atual + impacto * (1 - impacto_atual)
+                if aplicavel and score > 0.3:  # Só considera modelos com score mínimo
+                    acao = self._gerar_acao_redesign(nome_modelo, diagnostico, score)
+                    acoes.append(acao)
         
-        eficacia = sum(impacto_combinado.values()) / max(1, len(impacto_combinado))
+        # Ordena ações por prioridade
+        acoes.sort(key=lambda a: a.prioridade, reverse=True)
         
-        # Calcula risco (média ponderada pela prioridade)
-        soma_prioridades = sum(acao.prioridade for acao in acoes_plano)
-        if soma_prioridades > 0:
-            risco = sum(acao.risco * acao.prioridade for acao in acoes_plano) / soma_prioridades
-        else:
-            risco = sum(acao.risco for acao in acoes_plano) / len(acoes_plano)
-        
-        # Inverte risco (menor é melhor)
-        risco = 1.0 - risco
-        
-        # Calcula tempo (soma dos tempos estimados)
-        tempo_total = sum(acao.tempo_estimado for acao in acoes_plano)
-        
-        # Normaliza tempo (menor é melhor)
-        tempo_max = 3600  # 1 hora como referência
-        tempo_norm = max(0, 1.0 - (tempo_total / tempo_max))
-        
-        # Calcula recursos (complexidade de recursos necessários)
-        recursos_totais = set()
-        for acao in acoes_plano:
-            recursos_totais.update(acao.recursos_necessarios.keys())
-        
-        # Normaliza recursos (menor é melhor)
-        recursos_max = 10  # Referência
-        recursos_norm = max(0, 1.0 - (len(recursos_totais) / recursos_max))
-        
-        # Calcula score total ponderado
-        total = (
-            self.pesos_objetivos["eficacia"] * eficacia +
-            self.pesos_objetivos["risco"] * risco +
-            self.pesos_objetivos["tempo"] * tempo_norm +
-            self.pesos_objetivos["recursos"] * recursos_norm
-        )
-        
-        return {
-            "eficacia": eficacia,
-            "risco": risco,
-            "tempo": tempo_norm,
-            "recursos": recursos_norm,
-            "total": total
-        }
-    
-    def _selecionar_pais(self, populacao: List[List[int]], scores: List[Dict[str, float]]) -> List[Tuple[List[int], List[int]]]:
-        """
-        Seleciona pares de pais para reprodução usando torneio.
-        
-        Args:
-            populacao: Lista de planos
-            scores: Lista de scores para cada plano
-            
-        Returns:
-            Lista de pares de pais (cada par é uma tupla de dois planos)
-        """
-        pares = []
-        
-        # Cria lista de índices e scores totais
-        indices = list(range(len(populacao)))
-        scores_totais = [s["total"] for s in scores]
-        
-        # Seleciona pares usando torneio
-        for _ in range(len(populacao) // 2):
-            # Seleciona primeiro pai
-            candidatos1 = random.sample(indices, min(3, len(indices)))
-            pai1_idx = max(candidatos1, key=lambda i: scores_totais[i])
-            
-            # Seleciona segundo pai
-            candidatos2 = random.sample([i for i in indices if i != pai1_idx], min(3, len(indices) - 1))
-            if not candidatos2:  # Se não houver candidatos diferentes
-                candidatos2 = [pai1_idx]  # Usa o mesmo pai
-            pai2_idx = max(candidatos2, key=lambda i: scores_totais[i])
-            
-            # Adiciona par
-            pares.append((populacao[pai1_idx], populacao[pai2_idx]))
-        
-        return pares
-    
-    def _cruzar(self, pai1: List[int], pai2: List[int]) -> Tuple[List[int], List[int]]:
-        """
-        Realiza cruzamento entre dois pais.
-        
-        Args:
-            pai1: Primeiro plano pai
-            pai2: Segundo plano pai
-            
-        Returns:
-            Tupla com dois planos filhos
-        """
-        # Cria conjuntos de ações
-        acoes_pai1 = set(pai1)
-        acoes_pai2 = set(pai2)
-        
-        # Identifica ações comuns e diferentes
-        comuns = acoes_pai1.intersection(acoes_pai2)
-        so_pai1 = acoes_pai1 - comuns
-        so_pai2 = acoes_pai2 - comuns
-        
-        # Cria filhos
-        filho1 = list(comuns)
-        filho2 = list(comuns)
-        
-        # Distribui ações diferentes
-        for acao in so_pai1:
-            if random.random() < 0.5:
-                filho1.append(acao)
-            else:
-                filho2.append(acao)
-        
-        for acao in so_pai2:
-            if random.random() < 0.5:
-                filho1.append(acao)
-            else:
-                filho2.append(acao)
-        
-        return filho1, filho2
-    
-    def _mutar(self, plano: List[int], num_acoes: int, taxa_mutacao: float = 0.1) -> List[int]:
-        """
-        Aplica mutação a um plano.
-        
-        Args:
-            plano: Plano a ser mutado
-            num_acoes: Número total de ações disponíveis
-            taxa_mutacao: Probabilidade de mutação
-            
-        Returns:
-            Plano mutado
-        """
-        plano_mutado = plano.copy()
-        
-        # Para cada ação possível
-        for i in range(num_acoes):
-            if random.random() < taxa_mutacao:
-                # Inverte presença da ação
-                if i in plano_mutado:
-                    plano_mutado.remove(i)
-                else:
-                    plano_mutado.append(i)
-        
-        # Garante que o plano não está vazio
-        if not plano_mutado and num_acoes > 0:
-            plano_mutado.append(random.randint(0, num_acoes - 1))
-        
-        return plano_mutado
-    
-    def otimizar_plano(self, acoes: List[AcaoCorretiva]) -> Tuple[List[AcaoCorretiva], float]:
-        """
-        Otimiza um plano de ação usando algoritmo genético.
-        
-        Args:
-            acoes: Lista de ações disponíveis
-            
-        Returns:
-            Tupla (lista de ações selecionadas, score total)
-        """
-        if not acoes:
-            return [], 0.0
-        
-        # Gera população inicial
-        populacao = self._gerar_populacao_inicial(acoes)
-        
-        # Evolui população
-        for geracao in range(self.geracoes):
-            # Avalia população
-            scores = [self._avaliar_plano(plano, acoes) for plano in populacao]
-            
-            # Seleciona pais
-            pares_pais = self._selecionar_pais(populacao, scores)
-            
-            # Cria nova população
-            nova_populacao = []
-            
-            # Elitismo: mantém o melhor plano
-            melhor_idx = max(range(len(scores)), key=lambda i: scores[i]["total"])
-            nova_populacao.append(populacao[melhor_idx])
-            
-            # Gera filhos
-            for pai1, pai2 in pares_pais:
-                filho1, filho2 = self._cruzar(pai1, pai2)
-                
-                # Aplica mutação
-                filho1 = self._mutar(filho1, len(acoes))
-                filho2 = self._mutar(filho2, len(acoes))
-                
-                nova_populacao.extend([filho1, filho2])
-            
-            # Limita tamanho da população
-            populacao = nova_populacao[:self.tamanho_populacao]
-        
-        # Avalia população final
-        scores_finais = [self._avaliar_plano(plano, acoes) for plano in populacao]
-        
-        # Seleciona melhor plano
-        melhor_idx = max(range(len(scores_finais)), key=lambda i: scores_finais[i]["total"])
-        melhor_plano = populacao[melhor_idx]
-        melhor_score = scores_finais[melhor_idx]["total"]
-        
-        # Converte índices em ações
-        acoes_selecionadas = [acoes[i] for i in melhor_plano]
-        
-        logger.info(f"Plano otimizado com {len(acoes_selecionadas)} ações e score {melhor_score:.4f}")
-        
-        return acoes_selecionadas, melhor_score
+        # Limita número de ações de redesign (são mais complexas)
+        return acoes[:2]
 
 
-class GeradorAcoes:
+class OrquestradorAcoes:
     """
-    Coordena os diferentes geradores de ações para produzir planos integrados.
+    Coordena a geração e execução de planos de ação.
     
-    Como um estrategista que sintetiza múltiplas perspectivas,
-    harmoniza as visões de curto, médio e longo prazo,
-    criando um plano coerente que navega entre o urgente e o importante.
+    Como um maestro que rege a sinfonia da autocura,
+    harmoniza as intervenções em diferentes escalas temporais,
+    equilibrando a urgência do presente com a visão do futuro.
     """
     def __init__(self):
         self.gerador_hotfix = GeradorHotfix()
         self.motor_refatoracao = MotorRefatoracao()
-        self.projetista_evolutivo = ProjetistaEvolutivo()
-        self.orquestrador = OrquestradorPrioridades()
-        self.planos_recentes = deque(maxlen=100)
+        self.projetor_redesign = ProjetorRedesign()
+        self.planos_acao = {}
+        self.historico_execucoes = []
         self.lock = threading.Lock()
-        logger.info("GeradorAcoes inicializado")
+        logger.info("OrquestradorAcoes inicializado")
     
-    def gerar_plano(self, diagnostico: Diagnostico) -> PlanoAcao:
+    def gerar_plano_acao(self, diagnostico: Diagnostico) -> PlanoAcao:
         """
         Gera um plano de ação completo com base no diagnóstico.
         
@@ -1058,364 +875,222 @@ class GeradorAcoes:
         Returns:
             Plano de ação gerado
         """
+        # Gera ações de diferentes tipos
+        acoes_hotfix = self.gerador_hotfix.gerar_acoes(diagnostico)
+        acoes_refatoracao = self.motor_refatoracao.gerar_acoes(diagnostico)
+        acoes_redesign = self.projetor_redesign.gerar_acoes(diagnostico)
+        
+        # Combina todas as ações
+        todas_acoes = acoes_hotfix + acoes_refatoracao + acoes_redesign
+        
+        # Ordena ações por prioridade
+        todas_acoes.sort(key=lambda a: a.prioridade, reverse=True)
+        
+        # Cria plano de ação
+        plano_id = f"plano_{int(time.time())}_{random.randint(1000, 9999)}"
+        
+        plano = PlanoAcao(
+            id=plano_id,
+            diagnostico_id=diagnostico.id,
+            acoes=todas_acoes,
+            timestamp=time.time()
+        )
+        
+        # Armazena plano
         with self.lock:
-            # Gera ID único para o plano
-            plano_id = f"plano_{int(time.time())}_{random.randint(1000, 9999)}"
-            
-            # Gera ações de cada tipo
-            acoes_hotfix = self.gerador_hotfix.gerar_acoes(diagnostico)
-            acoes_refatoracao = self.motor_refatoracao.gerar_acoes(diagnostico)
-            acoes_evolutivas = self.projetista_evolutivo.gerar_acoes(diagnostico)
-            
-            # Combina todas as ações
-            todas_acoes = acoes_hotfix + acoes_refatoracao + acoes_evolutivas
-            
-            # Se não houver ações, retorna plano vazio
-            if not todas_acoes:
-                plano = PlanoAcao(
-                    id=plano_id,
-                    diagnostico_id=diagnostico.id,
-                    acoes=[],
-                    timestamp=time.time(),
-                    score=0.0,
-                    status="criado",
-                    metricas_impactadas=[]
-                )
-                
-                self.planos_recentes.append(plano)
-                return plano
-            
-            # Otimiza plano
-            acoes_otimizadas, score = self.orquestrador.otimizar_plano(todas_acoes)
-            
-            # Identifica métricas impactadas
-            metricas_impactadas = set()
-            for acao in acoes_otimizadas:
-                for dimensao in acao.impacto_estimado.keys():
-                    for metrica in diagnostico.metricas_analisadas:
-                        if metrica.dimensao == dimensao:
-                            metricas_impactadas.add(metrica.nome)
-            
-            # Cria plano de ação
-            plano = PlanoAcao(
-                id=plano_id,
-                diagnostico_id=diagnostico.id,
-                acoes=acoes_otimizadas,
-                timestamp=time.time(),
-                score=score,
-                status="criado",
-                metricas_impactadas=list(metricas_impactadas)
-            )
-            
-            # Armazena plano no histórico
-            self.planos_recentes.append(plano)
-            
-            logger.info(f"Plano {plano_id} gerado com {len(acoes_otimizadas)} ações e score {score:.4f}")
-            
-            return plano
+            self.planos_acao[plano_id] = plano
+        
+        return plano
     
     def obter_plano(self, plano_id: str) -> Optional[PlanoAcao]:
         """
-        Obtém um plano pelo ID.
+        Obtém um plano de ação pelo ID.
         
         Args:
             plano_id: ID do plano
             
         Returns:
-            Plano ou None se não encontrado
+            Plano de ação ou None se não encontrado
         """
         with self.lock:
-            for plano in self.planos_recentes:
-                if plano.id == plano_id:
-                    return plano
-            
-            return None
+            return self.planos_acao.get(plano_id)
     
-    def atualizar_status_plano(self, plano_id: str, status: str, resultado: Dict[str, Any] = None) -> bool:
+    def atualizar_status_plano(self, plano_id: str, status: str, resultado: Dict[str, Any] = None):
         """
-        Atualiza o status de um plano.
+        Atualiza o status de um plano de ação.
         
         Args:
             plano_id: ID do plano
             status: Novo status
-            resultado: Resultado opcional
-            
-        Returns:
-            True se atualizado com sucesso, False caso contrário
+            resultado: Resultado opcional da execução
         """
         with self.lock:
-            plano = self.obter_plano(plano_id)
-            if not plano:
-                return False
-            
-            plano.status = status
-            if resultado:
-                plano.resultado = resultado
-            
-            logger.info(f"Plano {plano_id} atualizado para status '{status}'")
-            
-            return True
+            if plano_id in self.planos_acao:
+                plano = self.planos_acao[plano_id]
+                plano.status = status
+                
+                if resultado:
+                    plano.resultado = resultado
+                
+                # Registra no histórico se concluído ou falhou
+                if status in ["concluido", "falhou"]:
+                    self.historico_execucoes.append({
+                        "plano_id": plano_id,
+                        "status": status,
+                        "timestamp": time.time(),
+                        "resultado": resultado
+                    })
     
-    def registrar_eficacia_acoes(self, plano_id: str, eficacias: Dict[str, float]) -> bool:
+    def avaliar_eficacia_acoes(self, plano_id: str, metricas_antes: List[MetricaDimensional], 
+                             metricas_depois: List[MetricaDimensional]) -> Dict[str, float]:
         """
-        Registra a eficácia das ações de um plano.
+        Avalia a eficácia das ações executadas comparando métricas antes e depois.
         
         Args:
-            plano_id: ID do plano
-            eficacias: Dicionário mapeando IDs de ações para valores de eficácia
+            plano_id: ID do plano executado
+            metricas_antes: Métricas antes da execução
+            metricas_depois: Métricas depois da execução
             
         Returns:
-            True se registrado com sucesso, False caso contrário
+            Dicionário com scores de eficácia por ação
         """
         with self.lock:
-            plano = self.obter_plano(plano_id)
-            if not plano:
-                return False
+            if plano_id not in self.planos_acao:
+                return {}
             
-            # Registra eficácia para cada ação
+            plano = self.planos_acao[plano_id]
+            
+            # Agrupa métricas por nome
+            metricas_antes_dict = {m.nome: m for m in metricas_antes}
+            metricas_depois_dict = {m.nome: m for m in metricas_depois}
+            
+            # Calcula melhorias por métrica
+            melhorias = {}
+            
+            for nome in set(metricas_antes_dict.keys()) & set(metricas_depois_dict.keys()):
+                metrica_antes = metricas_antes_dict[nome]
+                metrica_depois = metricas_depois_dict[nome]
+                
+                # Calcula melhoria relativa
+                if metrica_antes.dimensao == "erros":
+                    # Para erros, menor é melhor
+                    if metrica_antes.valor > 0:
+                        melhoria = max(0, (metrica_antes.valor - metrica_depois.valor) / metrica_antes.valor)
+                    else:
+                        melhoria = 0 if metrica_depois.valor > 0 else 1
+                elif metrica_antes.dimensao == "latencia":
+                    # Para latência, menor é melhor
+                    if metrica_antes.valor > 0:
+                        melhoria = max(0, (metrica_antes.valor - metrica_depois.valor) / metrica_antes.valor)
+                    else:
+                        melhoria = 0 if metrica_depois.valor > 0 else 1
+                elif metrica_antes.dimensao == "throughput":
+                    # Para throughput, maior é melhor
+                    if metrica_antes.valor > 0:
+                        melhoria = max(0, (metrica_depois.valor - metrica_antes.valor) / metrica_antes.valor)
+                    else:
+                        melhoria = 1 if metrica_depois.valor > 0 else 0
+                else:
+                    # Para outras dimensões, assume que menor é melhor
+                    if metrica_antes.valor > 0:
+                        melhoria = max(0, (metrica_antes.valor - metrica_depois.valor) / metrica_antes.valor)
+                    else:
+                        melhoria = 0 if metrica_depois.valor > 0 else 1
+                
+                melhorias[nome] = melhoria
+            
+            # Calcula eficácia por ação
+            eficacia_acoes = {}
+            
             for acao in plano.acoes:
-                if acao.id in eficacias:
-                    eficacia = eficacias[acao.id]
-                    
-                    # Registra no gerador apropriado
-                    if acao.tipo == TipoAcao.HOTFIX:
-                        self.gerador_hotfix.registrar_eficacia(acao.id, eficacia)
-                    elif acao.tipo == TipoAcao.REFATORACAO:
-                        self.motor_refatoracao.registrar_aplicacao(
-                            acao.contexto.get("padrao", "desconhecido"),
-                            {"acao_id": acao.id, "eficacia": eficacia}
-                        )
-                    elif acao.tipo == TipoAcao.REDESIGN:
-                        self.projetista_evolutivo.registrar_evolucao(
-                            acao.contexto.get("estrategia", "desconhecida"),
-                            {"acao_id": acao.id, "eficacia": eficacia}
-                        )
+                # Calcula eficácia com base no impacto estimado
+                score_eficacia = 0.0
+                peso_total = 0.0
+                
+                for metrica, impacto in acao.impacto_estimado.items():
+                    if metrica in melhorias:
+                        score_eficacia += melhorias[metrica] * impacto
+                        peso_total += impacto
+                
+                if peso_total > 0:
+                    eficacia_acoes[acao.id] = score_eficacia / peso_total
+                else:
+                    eficacia_acoes[acao.id] = 0.0
+                
+                # Registra eficácia para ações de hotfix
+                if acao.tipo == TipoAcao.HOTFIX:
+                    self.gerador_hotfix.registrar_eficacia(acao.id, eficacia_acoes[acao.id])
             
-            logger.info(f"Eficácia registrada para {len(eficacias)} ações do plano {plano_id}")
-            
-            return True
-    
-    def salvar_plano(self, plano: PlanoAcao, caminho: str):
-        """
-        Salva um plano em arquivo.
-        
-        Args:
-            plano: Plano a ser salvo
-            caminho: Caminho do arquivo
-        """
-        with open(caminho, 'w') as f:
-            json.dump(plano.to_dict(), f, indent=2)
-        
-        logger.info(f"Plano {plano.id} salvo em {caminho}")
-    
-    def carregar_plano(self, caminho: str) -> Optional[PlanoAcao]:
-        """
-        Carrega um plano de arquivo.
-        
-        Args:
-            caminho: Caminho do arquivo
-            
-        Returns:
-            Plano carregado ou None se falhar
-        """
-        try:
-            with open(caminho, 'r') as f:
-                dados = json.load(f)
-            
-            plano = PlanoAcao.from_dict(dados)
-            logger.info(f"Plano {plano.id} carregado de {caminho}")
-            
-            return plano
-        
-        except Exception as e:
-            logger.error(f"Erro ao carregar plano: {str(e)}")
-            return None
+            return eficacia_acoes
 
-
-# Exemplo de uso
+# Inicialização da API e rotas
 if __name__ == "__main__":
-    # Cria gerador de ações
-    gerador = GeradorAcoes()
+    from flask import Flask, request, jsonify
     
-    # Registra templates de hotfix
-    template_latencia = {
-        "id": "hotfix_latencia_1",
-        "descricao": "Aumenta recursos para reduzir latência",
-        "comandos": [
-            "kubectl scale deployment api-service --replicas=5",
-            "kubectl set resources deployment api-service --limits=cpu=2,memory=4Gi"
-        ],
-        "impacto_estimado": {
-            "latencia": 0.4,
-            "recursos": -0.2  # Impacto negativo em recursos
-        },
-        "tempo_estimado": 60,
-        "recursos_necessarios": {
-            "cpu": 2,
-            "memoria": 4
-        },
-        "prioridade": 0.8,
-        "risco": 0.2,
-        "reversivel": True
-    }
+    app = Flask(__name__)
     
-    gerador.gerador_hotfix.registrar_template("latencia_alta", template_latencia)
+    # Inicializa o orquestrador
+    orquestrador = OrquestradorAcoes()
     
-    # Registra padrões de refatoração
-    padrao_cache = {
-        "descricao": "Implementa camada de cache para reduzir latência",
-        "condicoes": {
-            "anomalias": ["latencia_alta"],
-            "metricas": [
-                {"nome": "api_latencia_p95", "operador": "gt", "valor": 300}
-            ]
-        },
-        "comandos": [
-            "kubectl apply -f redis-cache.yaml",
-            "kubectl set env deployment api-service ENABLE_CACHE=true"
-        ],
-        "impacto_estimado": {
-            "latencia": 0.6,
-            "throughput": 0.3
-        },
-        "tempo_estimado": 300,
-        "recursos_necessarios": {
-            "redis": 1
-        },
-        "prioridade": 0.6,
-        "risco": 0.4,
-        "reversivel": True
-    }
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        return jsonify({"status": "healthy", "timestamp": time.time()})
     
-    gerador.motor_refatoracao.registrar_padrao("implementar_cache", padrao_cache)
+    @app.route('/api/acoes/gerar', methods=['POST'])
+    def gerar_acoes():
+        try:
+            data = request.json
+            diagnostico_id = data.get('diagnostico_id')
+            
+            if not diagnostico_id:
+                return jsonify({"error": "diagnostico_id é obrigatório"}), 400
+            
+            # Obtém o diagnóstico
+            diagnostico = obter_diagnostico(diagnostico_id)
+            
+            if not diagnostico:
+                return jsonify({"error": f"Diagnóstico {diagnostico_id} não encontrado"}), 404
+            
+            # Gera plano de ação
+            plano = orquestrador.gerar_plano_acao(diagnostico)
+            
+            return jsonify(plano.to_dict()), 200
+            
+        except Exception as e:
+            logger.error(f"Erro ao gerar ações: {e}")
+            return jsonify({"error": str(e)}), 500
     
-    # Registra estratégias evolutivas
-    estrategia_microservicos = {
-        "descricao": "Refatoração para arquitetura de microserviços",
-        "anomalias_alvo": ["latencia_alta", "erros_http"],
-        "tendencias_metricas": [
-            {"metrica": "api_latencia_p95", "direcao": "crescente"},
-            {"metrica": "api_requests_media_movel", "direcao": "crescente"}
-        ],
-        "comandos": [
-            "kubectl apply -f microservices-migration.yaml",
-            "kubectl apply -f service-mesh.yaml"
-        ],
-        "impacto_estimado": {
-            "latencia": 0.8,
-            "throughput": 0.7,
-            "erros": 0.6,
-            "recursos": -0.3  # Impacto negativo em recursos
-        },
-        "tempo_estimado": 1800,
-        "recursos_necessarios": {
-            "kubernetes": 1,
-            "istio": 1,
-            "devops": 2
-        },
-        "prioridade": 0.4,
-        "risco": 0.7,
-        "reversivel": False
-    }
+    @app.route('/api/acoes/planos/<plano_id>', methods=['GET'])
+    def obter_plano(plano_id):
+        try:
+            plano = orquestrador.obter_plano(plano_id)
+            
+            if not plano:
+                return jsonify({"error": f"Plano {plano_id} não encontrado"}), 404
+            
+            return jsonify(plano.to_dict()), 200
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter plano: {e}")
+            return jsonify({"error": str(e)}), 500
     
-    gerador.projetista_evolutivo.registrar_estrategia("microservicos", estrategia_microservicos)
+    @app.route('/api/acoes/planos/<plano_id>/status', methods=['PUT'])
+    def atualizar_status_plano(plano_id):
+        try:
+            data = request.json
+            status = data.get('status')
+            resultado = data.get('resultado')
+            
+            if not status:
+                return jsonify({"error": "status é obrigatório"}), 400
+            
+            orquestrador.atualizar_status_plano(plano_id, status, resultado)
+            
+            return jsonify({"sucesso": True}), 200
+            
+        except Exception as e:
+            logger.error(f"Erro ao atualizar status do plano: {e}")
+            return jsonify({"error": str(e)}), 500
     
-    # Simula um diagnóstico
-    from diagnostico.diagnostico import Diagnostico, PadraoAnomalia
-    
-    # Cria padrões de anomalia
-    padrao_latencia = PadraoAnomalia(
-        id="latencia_alta",
-        nome="Latência elevada",
-        dimensoes=["latencia"],
-        metricas_relacionadas=["api_latencia_p95", "api_latencia_media"],
-        limiar_confianca=0.7,
-        descricao="Padrão de latência elevada nas APIs"
-    )
-    
-    # Cria métricas
-    metricas = [
-        MetricaDimensional(
-            nome="api_latencia_p95",
-            valor=450.0,  # Valor alto
-            timestamp=time.time(),
-            contexto={"endpoint": "/api/data"},
-            dimensao="latencia",
-            unidade="ms"
-        ),
-        MetricaDimensional(
-            nome="api_latencia_media",
-            valor=120.0,
-            timestamp=time.time(),
-            contexto={"endpoint": "/api/data"},
-            dimensao="latencia",
-            unidade="ms"
-        ),
-        MetricaDimensional(
-            nome="api_requests_media_movel",
-            valor=250.0,
-            timestamp=time.time(),
-            contexto={"tipo": "media_movel", "janela": 10},
-            dimensao="throughput",
-            unidade="ops/s"
-        )
-    ]
-    
-    # Cria diagnóstico
-    diagnostico = Diagnostico(
-        id=f"diag_{int(time.time())}",
-        timestamp=time.time(),
-        anomalias_detectadas=[(padrao_latencia, 0.85)],
-        metricas_analisadas=metricas,
-        causa_raiz="Latência elevada devido a carga excessiva",
-        confianca=0.8,
-        recomendacoes=["Aumentar recursos", "Implementar cache"],
-        contexto={
-            "gradientes": {
-                "latencia:api_latencia_p95": {
-                    "curto_prazo": {"inclinacao": 2.5, "r2": 0.8},
-                    "medio_prazo": {"inclinacao": 1.8, "r2": 0.7}
-                },
-                "throughput:api_requests_media_movel": {
-                    "curto_prazo": {"inclinacao": 5.0, "r2": 0.9},
-                    "medio_prazo": {"inclinacao": 4.2, "r2": 0.85}
-                }
-            }
-        }
-    )
-    
-    # Gera plano de ação
-    plano = gerador.gerar_plano(diagnostico)
-    
-    # Imprime resultado
-    print(f"Plano: {plano.id}")
-    print(f"Score: {plano.score:.4f}")
-    print(f"Ações: {len(plano.acoes)}")
-    
-    for i, acao in enumerate(plano.acoes):
-        print(f"\nAção {i+1}: {acao.tipo.name} - {acao.descricao}")
-        print(f"Prioridade: {acao.prioridade:.2f}, Risco: {acao.risco:.2f}")
-        print(f"Impacto estimado: {acao.impacto_estimado}")
-        print(f"Comandos:")
-        for cmd in acao.comandos:
-            print(f"  {cmd}")
-    
-    # Simula execução do plano
-    gerador.atualizar_status_plano(plano.id, "em_execucao")
-    
-    # Simula conclusão do plano
-    eficacias = {acao.id: random.uniform(0.5, 0.9) for acao in plano.acoes}
-    gerador.registrar_eficacia_acoes(plano.id, eficacias)
-    
-    resultado = {
-        "tempo_execucao": 120,
-        "acoes_executadas": len(plano.acoes),
-        "eficacia_media": sum(eficacias.values()) / len(eficacias) if eficacias else 0
-    }
-    
-    gerador.atualizar_status_plano(plano.id, "concluido", resultado)
-    
-    # Verifica status final
-    plano_atualizado = gerador.obter_plano(plano.id)
-    print(f"\nStatus final: {plano_atualizado.status}")
-    print(f"Resultado: {plano_atualizado.resultado}")
+    # Inicia o servidor
+    app.run(host='0.0.0.0', port=8080)
