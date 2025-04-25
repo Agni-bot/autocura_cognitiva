@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	healingv1 "github.com/autocura-cognitiva/healing-operator/api/v1"
-	"github.com/autocura-cognitiva/healing-operator/controllers"
+	rollbackv1 "github.com/autocura-cognitiva/rollback-operator/api/v1"
+	"github.com/autocura-cognitiva/rollback-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -26,7 +26,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(healingv1.AddToScheme(scheme))
+	utilruntime.Must(rollbackv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -53,19 +53,19 @@ func main() {
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "healing-operator.autocura-cognitiva.io",
+		LeaderElectionID:       "rollback-operator.autocura-cognitiva.io",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	if err = (&controllers.HealingReconciler{
+	if err = (&controllers.RollbackReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("healing-controller"),
+		Recorder: mgr.GetEventRecorderFor("rollback-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "HealingPolicy")
+		setupLog.Error(err, "unable to create controller", "controller", "RollbackPolicy")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

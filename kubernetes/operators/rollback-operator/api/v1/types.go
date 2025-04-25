@@ -25,6 +25,12 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	return nil
 }
 
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,shortName=rp
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.lastAppliedStatus"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+
 // RollbackPolicy define uma política de rollback para recursos Kubernetes
 type RollbackPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -99,6 +105,8 @@ type RollbackPolicyStatus struct {
 	// Revisões para as quais foi feito rollback
 	RollbackRevisions map[string]int32 `json:"rollbackRevisions,omitempty"`
 }
+
+// +kubebuilder:object:root=true
 
 // RollbackPolicyList é uma lista de RollbackPolicy
 type RollbackPolicyList struct {

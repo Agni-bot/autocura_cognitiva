@@ -1,4 +1,4 @@
-module github.com/Agni-bot/autocura-cognitiva/kubernetes/operators/healing-operator
+module github.com/autocura-cognitiva/healing-operator
 
 go 1.18
 
@@ -7,6 +7,7 @@ require (
 	k8s.io/apimachinery v0.24.0
 	k8s.io/client-go v0.24.0
 	k8s.io/klog/v2 v2.60.1
+	sigs.k8s.io/controller-runtime v0.12.1
 )
 
 require (

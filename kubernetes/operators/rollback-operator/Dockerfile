@@ -1,12 +1,31 @@
-FROM golang:1.18-alpine
+FROM golang:1.18-alpine AS builder
 
-WORKDIR /app
+WORKDIR /workspace
 
-COPY . .
-
+# Copiar arquivos Go Modules
+COPY go.mod go.sum ./
 RUN go mod download
-RUN go build -o rollback-operator ./controller/
 
-EXPOSE 8080
+# Copiar o código-fonte
+COPY main.go main.go
+COPY api/ api/
+COPY controllers/ controllers/
 
-CMD ["./rollback-operator"]
+# Instalar controller-gen
+RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
+
+# Gerar código CRD e DeepCopy
+RUN controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+RUN controller-gen crd paths="./..." output:crd:artifacts:config=config/crd/bases
+
+# Compilar
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
+
+# Imagem final
+FROM alpine:3.16
+
+WORKDIR /
+COPY --from=builder /workspace/manager .
+USER 65532:65532
+
+ENTRYPOINT ["/manager"]
