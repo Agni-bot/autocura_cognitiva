@@ -16,7 +16,7 @@ TAG="dev"
 build_and_load() {
     local component=$1
     local dir=$2
-    local image_name="${REGISTRY}/autocura_cognitiva/${component}:${TAG}"
+    local image_name="${REGISTRY}/autocura-cognitiva/${component}:${TAG}"
     
     echo "Construindo imagem: ${image_name}"
     cd "${BASE_DIR}/${dir}"

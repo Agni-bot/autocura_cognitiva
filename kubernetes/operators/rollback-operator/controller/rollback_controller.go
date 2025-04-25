@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
 
-	rollbackv1 "https://github.com/Agni-bot/autocura_cognitiva/tree/main/kubernetes/operators/rollback-operator/api/v1"
+	rollbackv1 "github.com/autocura-cognitiva/rollback-operator/api/v1"
 )
 
 // RollbackController é o controlador para recursos RollbackPolicy

@@ -16,8 +16,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	healingv1 "https://github.com/Agni-bot/autocura_cognitiva/tree/main/kubernetes/operators/healing-operator/api/v1"
-	"https://github.com/Agni-bot/autocura_cognitiva/tree/main/kubernetes/operators/healing-operator/controller"
+	healingv1 "github.com/autocura-cognitiva/healing-operator/api/v1"
+	"github.com/autocura-cognitiva/healing-operator/controllers"
 )
 
 var (

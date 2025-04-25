@@ -154,5 +154,3 @@ Para mais informações, consulte os documentos na pasta `docs/`:
 ## Licença
 
 Este projeto está licenciado sob a licença MIT - veja o arquivo LICENSE para detalhes.
-"# autocura_cognitiva" 
-"# autocura_cognitiva" 

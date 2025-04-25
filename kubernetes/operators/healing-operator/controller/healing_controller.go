@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
 
-	healingv1 "https://github.com/Agni-bot/autocura_cognitiva/tree/main/kubernetes/operators/healing-operator/api/v1"
+	healingv1 "github.com/autocura-cognitiva/healing-operator/api/v1"
 )
 
 // HealingController é o controlador para recursos HealingPolicy

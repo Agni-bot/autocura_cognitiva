@@ -1,4 +1,4 @@
-module github.com/autocura_cognitiva/healing-operator
+module github.com/autocura-cognitiva/healing-operator
 
 go 1.18
 
