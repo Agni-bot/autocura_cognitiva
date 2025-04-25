@@ -32,7 +32,7 @@ fi
 cat > kind-config.yaml << EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-name: autocura-cognitiva
+name: autocura_cognitiva
 nodes:
 - role: control-plane
   extraPortMappings:
@@ -49,12 +49,12 @@ containerdConfigPatches:
 EOF
 
 # Verificar se o cluster já existe
-if kind get clusters | grep -q "autocura-cognitiva"; then
-    echo "Cluster 'autocura-cognitiva' já existe. Deseja excluí-lo e criar um novo? (s/n)"
+if kind get clusters | grep -q "autocura_cognitiva"; then
+    echo "Cluster 'autocura_cognitiva' já existe. Deseja excluí-lo e criar um novo? (s/n)"
     read -r resposta
     if [[ "$resposta" =~ ^[Ss]$ ]]; then
         echo "Excluindo cluster existente..."
-        kind delete cluster --name autocura-cognitiva
+        kind delete cluster --name autocura_cognitiva
     else
         echo "Mantendo cluster existente. Configuração concluída!"
         rm kind-config.yaml
@@ -83,19 +83,19 @@ if ! docker network inspect kind | grep -q "registry"; then
 fi
 
 # Criar cluster kind com a configuração personalizada
-echo "Criando cluster kind 'autocura-cognitiva'..."
+echo "Criando cluster kind 'autocura_cognitiva'..."
 kind create cluster --config kind-config.yaml
 
 # Verificar se o cluster foi criado com sucesso
-if ! kind get clusters | grep -q "autocura-cognitiva"; then
+if ! kind get clusters | grep -q "autocura_cognitiva"; then
     echo "Falha ao criar o cluster kind."
     exit 1
 fi
 
-echo "Cluster kind 'autocura-cognitiva' criado com sucesso!"
+echo "Cluster kind 'autocura_cognitiva' criado com sucesso!"
 
 # Configurar kubectl para usar o contexto do kind
-kubectl cluster-info --context kind-autocura-cognitiva
+kubectl cluster-info --context kind-autocura_cognitiva
 
 # Limpar arquivo de configuração temporário
 rm kind-config.yaml

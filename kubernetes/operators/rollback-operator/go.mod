@@ -1,4 +1,4 @@
-module github.com/autocura-cognitiva/rollback-operator
+module github.com/autocura_cognitiva/rollback-operator
 
 go 1.18
 
