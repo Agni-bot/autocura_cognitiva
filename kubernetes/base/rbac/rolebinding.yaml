@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: autocura-cognitiva-rolebinding
+  namespace: autocura-cognitiva
+subjects:
+- kind: ServiceAccount
+  name: autocura-cognitiva-sa
+  namespace: autocura-cognitiva
+roleRef:
+  kind: Role
+  name: autocura-cognitiva-role
+  apiGroup: rbac.authorization.k8s.io

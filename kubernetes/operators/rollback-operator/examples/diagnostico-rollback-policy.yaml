@@ -1,0 +1,32 @@
+apiVersion: autocura.cognitiva.io/v1
+kind: RollbackPolicy
+metadata:
+  name: diagnostico-rollback-policy
+  namespace: autocura-cognitiva
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: diagnostico
+    namespace: autocura-cognitiva
+  metrics:
+    - name: error_rate
+      weight: 0.5
+      threshold: 0.05
+      comparisonOperator: GreaterThan
+    - name: latency_p95
+      weight: 0.3
+      threshold: 200
+      comparisonOperator: GreaterThan
+    - name: success_rate
+      weight: 0.2
+      threshold: 0.95
+      comparisonOperator: LessThan
+  probabilityThreshold: 0.7
+  observationWindowSeconds: 300
+  rollbackToRevision: "diagnostico-stable"
+  successCriteria:
+    metricName: success_rate
+    threshold: 0.98
+    comparisonOperator: GreaterThan
+    durationSeconds: 600

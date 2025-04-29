@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observabilidade
+  namespace: autocura-cognitiva
+  labels:
+    app: observabilidade
+    component: autocura-cognitiva
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: observabilidade
+  template:
+    metadata:
+      labels:
+        app: observabilidade
+    spec:
+      serviceAccountName: autocura-cognitiva-sa
+      containers:
+      - name: observabilidade
+        image: autocura-cognitiva/observabilidade:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          name: http
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 500m
+            memory: 512Mi
+        env:
+        - name: MONITORAMENTO_URL
+          value: "http://monitoramento:8080"
+        - name: DIAGNOSTICO_URL
+          value: "http://diagnostico:8081"
+        - name: GERADOR_ACOES_URL
+          value: "http://gerador-acoes:8082"
+        - name: CONFIG_MAP
+          value: observabilidade-config
+        - name: LOG_LEVEL
+          value: INFO
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+        - name: visualizacoes-volume
+          mountPath: /app/visualizacoes
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config-volume
+        configMap:
+          name: observabilidade-config
+      - name: visualizacoes-volume
+        persistentVolumeClaim:
+          claimName: autocura-cognitiva-visualizacoes
