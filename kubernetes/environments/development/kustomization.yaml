@@ -7,8 +7,10 @@ resources:
 - ../../components/diagnostico
 - ../../components/gerador-acoes
 - ../../components/observabilidade
+- ../../operators/healing-operator
+- ../../operators/rollback-operator
 
-namespace: autocura-cognitiva-dev
+namespace: autocura-cognitiva
 
 commonLabels:
   environment: development
@@ -18,13 +20,15 @@ patches:
 - path: resources-patch.yaml
   target:
     kind: Deployment
-    
+    labelSelector: app.kubernetes.io/part-of=autocura-cognitiva
+
 configMapGenerator:
 - name: environment-config
   literals:
   - ENV=development
   - DEBUG=true
   - LOG_LEVEL=DEBUG
+  - POD_DISRUPTION_BUDGET=1
 
 # Configuração de imagens com nomes completos para acesso externo
 images:
@@ -39,4 +43,10 @@ images:
   newTag: dev
 - name: autocura-cognitiva/observabilidade
   newName: localhost:5000/autocura-cognitiva/observabilidade
+  newTag: dev
+- name: autocura-cognitiva/healing-operator
+  newName: localhost:5000/autocura-cognitiva/healing-operator
+  newTag: dev
+- name: autocura-cognitiva/rollback-operator
+  newName: localhost:5000/autocura-cognitiva/rollback-operator
   newTag: dev

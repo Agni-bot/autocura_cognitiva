@@ -31,9 +31,19 @@ import uuid
 import requests
 
 # Configuração de logging
+log_level = os.getenv('LOG_LEVEL', 'INFO')
+log_file = os.getenv('LOG_FILE', '/app/logs/observabilidade.log')
+
+# Cria diretório de logs se não existir
+os.makedirs(os.path.dirname(log_file), exist_ok=True)
+
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=getattr(logging, log_level),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()
+    ]
 )
 
 logger = logging.getLogger("Observabilidade4D")
@@ -656,6 +666,28 @@ class VisualizadorHolografico:
             img_str = base64.b64encode(buf.read()).decode('utf-8')
             return f"data:image/png;base64,{img_str}"
 
+def verificar_servicos_dependentes():
+    """
+    Verifica se os serviços dependentes estão disponíveis.
+    Retorna True se todos os serviços estiverem disponíveis.
+    """
+    servicos = {
+        "monitoramento": "http://monitoramento:8080/health",
+        "diagnostico": "http://diagnostico:8080/health"
+    }
+    
+    for nome, url in servicos.items():
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code != 200:
+                logger.error(f"Serviço {nome} retornou status {response.status_code}")
+                return False
+        except Exception as e:
+            logger.error(f"Erro ao conectar com serviço {nome}: {e}")
+            return False
+    
+    return True
+
 # Inicialização da API e rotas
 if __name__ == "__main__":
     from flask import Flask, request, jsonify
@@ -664,6 +696,11 @@ if __name__ == "__main__":
     
     # Inicializa o visualizador
     visualizador = VisualizadorHolografico()
+    
+    # Verifica serviços dependentes antes de iniciar
+    if not verificar_servicos_dependentes():
+        logger.error("Serviços dependentes não estão disponíveis. Encerrando...")
+        exit(1)
     
     @app.route('/health', methods=['GET'])
     def health_check():

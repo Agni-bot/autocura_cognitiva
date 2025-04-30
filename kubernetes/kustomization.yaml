@@ -17,6 +17,19 @@ commonLabels:
 
 namespace: autocura-cognitiva
 
+# Configurações de recursos e limites padrão para todos os pods
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+# Configurações de tolerância a falhas
+podDisruptionBudget:
+  minAvailable: 1
+
 # Configuração para seleção de ambiente
 # Descomente apenas um dos overlays abaixo para selecionar o ambiente desejado
 

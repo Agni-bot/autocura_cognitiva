@@ -28,6 +28,18 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
+REM Adicionar verificação de versão
+kind version
+kubectl version --client
+
+REM Adicionar verificação de portas
+netstat -ano | findstr ":30000"
+netstat -ano | findstr ":30001"
+
+REM Adicionar limpeza em caso de erro
+setlocal enabledelayedexpansion
+set "error=0"
+
 REM Criar arquivo de configuração do kind
 echo kind: Cluster > kind-config.yaml
 echo apiVersion: kind.x-k8s.io/v1alpha4 >> kind-config.yaml
@@ -103,6 +115,60 @@ kubectl cluster-info --context kind-autocura-cognitiva
 REM Limpar arquivo de configuração temporário
 del kind-config.yaml
 
+REM Adicionar verificação de diretórios
+if not exist "%BASE_DIR%\src\monitoramento" (
+    echo Erro: Diretório monitoramento não encontrado
+    exit /b 1
+)
+
+if not exist "%BASE_DIR%\src\diagnostico" (
+    echo Erro: Diretório diagnostico não encontrado
+    exit /b 1
+)
+
+if not exist "%BASE_DIR%\src\gerador_acoes" (
+    echo Erro: Diretório gerador_acoes não encontrado
+    exit /b 1
+)
+
+if not exist "%BASE_DIR%\src\observabilidade" (
+    echo Erro: Diretório observabilidade não encontrado
+    exit /b 1
+)
+
 echo === Ambiente Kubernetes local configurado com sucesso! ===
 echo Agora você pode executar 'build.cmd' para construir as imagens e
 echo em seguida 'kubectl apply -k kubernetes\environments\development' para implantar o sistema.
+
+REM Adicionar tratamento de erros no build
+docker build -t %REGISTRY%/autocura-cognitiva/monitoramento:%TAG% .
+if %ERRORLEVEL% NEQ 0 (
+    echo Erro ao construir imagem monitoramento
+    exit /b 1
+)
+
+# Adicionar configurações de monitoramento
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: autocura-cognitiva
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: autocura-cognitiva
+
+# Adicionar Network Policies
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: autocura-cognitiva
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: autocura-cognitiva
+
+# Adicionar pipeline básico
+stages:
+  - test
+  - build
+  - deploy

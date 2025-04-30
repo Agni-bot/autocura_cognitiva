@@ -4,10 +4,9 @@ kind: Kustomization
 resources:
 - deployment.yaml
 - crds/healingpolicy.yaml
+- pdb.yaml
 
 commonLabels:
   app.kubernetes.io/component: healing-operator
   app.kubernetes.io/part-of: autocura-cognitiva
   app.kubernetes.io/managed-by: kustomize
-
-namePrefix: healing-
