@@ -8,6 +8,6 @@ resources:
 - rbac/rolebinding.yaml
 - configmap.yaml
 
-commonLabels:
+labels:
   app.kubernetes.io/part-of: autocura-cognitiva
   app.kubernetes.io/managed-by: kustomize

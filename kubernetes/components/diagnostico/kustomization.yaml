@@ -6,7 +6,7 @@ resources:
 - service.yaml
 - configmap.yaml
 
-commonLabels:
+labels:
   app.kubernetes.io/component: diagnostico
   app.kubernetes.io/part-of: autocura-cognitiva
   app.kubernetes.io/managed-by: kustomize
