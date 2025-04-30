@@ -536,7 +536,7 @@ spec:
       serviceAccountName: autocura-cognitiva-sa
       containers:
       - name: monitoramento
-        image: autocura-cognitiva/monitoramento:latest
+        image: autocura-cognitiva/monitoramento:dev
         imagePullPolicy: Always
         ports:
         - containerPort: 8080

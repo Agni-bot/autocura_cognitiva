@@ -4,7 +4,7 @@ import time
 import threading
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Tuple, Optional, Callable
 from dataclasses import dataclass
 from collections import deque
 import logging
@@ -789,6 +789,10 @@ class AnalisadorFluxoContínuo:
 
 # Exemplo de uso
 if __name__ == "__main__":
+    # Importa módulos necessários
+    import random
+    logger.info("Módulo random importado com sucesso")
+    
     # Cria coletores
     coletor_throughput = ColetorThroughput("api_requests", intervalo=5.0)
     coletor_erros = ColetorErros("api_errors", intervalo=5.0, categorias=["http", "database", "auth"])
@@ -824,7 +828,10 @@ if __name__ == "__main__":
     try:
         for i in range(30):
             # Simula requisições
-            coletor_throughput.registrar_operacao(quantidade=random.randint(1, 10))
+            logger.info("Tentando registrar operação com random.randint")
+            quantidade = random.randint(1, 10)
+            logger.info(f"Valor gerado: {quantidade}")
+            coletor_throughput.registrar_operacao(quantidade=quantidade)
             
             # Simula erros
             if random.random() < 0.3:
@@ -838,8 +845,9 @@ if __name__ == "__main__":
             # Aguarda
             time.sleep(1)
     
-    except KeyboardInterrupt:
-        print("Interrompido pelo usuário")
+    except Exception as e:
+        logger.error(f"Erro durante a execução: {str(e)}")
+        raise
     
     finally:
         # Para coletores

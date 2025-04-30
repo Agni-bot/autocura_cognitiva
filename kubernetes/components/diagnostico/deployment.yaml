@@ -19,18 +19,18 @@ spec:
       serviceAccountName: autocura-cognitiva-sa
       containers:
       - name: diagnostico
-        image: autocura-cognitiva/diagnostico:latest
-        imagePullPolicy: Always
+        image: localhost:5000/autocura-cognitiva/diagnostico:dev
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8081
           name: http
         resources:
           limits:
-            cpu: 2000m
-            memory: 2Gi
+            cpu: 1500m
+            memory: 1.5Gi
           requests:
-            cpu: 1000m
-            memory: 1Gi
+            cpu: 750m
+            memory: 768Mi
         env:
         - name: MONITORAMENTO_URL
           value: "http://monitoramento:8080"
@@ -47,14 +47,18 @@ spec:
           httpGet:
             path: /health
             port: http
-          initialDelaySeconds: 60
-          periodSeconds: 15
+          initialDelaySeconds: 90
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /ready
             port: http
-          initialDelaySeconds: 10
-          periodSeconds: 10
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
       volumes:
       - name: config-volume
         configMap:
