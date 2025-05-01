@@ -48,6 +48,11 @@ logging.basicConfig(
 
 logger = logging.getLogger("Observabilidade4D")
 
+# Configuração das URLs dos serviços
+MONITORAMENTO_URL = os.getenv('MONITORAMENTO_URL', 'http://monitoramento:8080')
+DIAGNOSTICO_URL = os.getenv('DIAGNOSTICO_URL', 'http://diagnostico:8080')
+GERADOR_ACOES_URL = os.getenv('GERADOR_ACOES_URL', 'http://gerador-acoes:8080')
+
 # Classes locais para substituir importações diretas
 @dataclass
 class MetricaDimensional:
@@ -125,7 +130,7 @@ def obter_metricas_do_monitoramento(metrica_id=None):
         Lista de métricas ou uma métrica específica
     """
     try:
-        base_url = "http://monitoramento:8080/api/metricas"
+        base_url = f"{MONITORAMENTO_URL}/api/metricas"
         if metrica_id:
             url = f"{base_url}/{metrica_id}"
         else:
@@ -180,7 +185,7 @@ def obter_diagnostico(diagnostico_id):
         Objeto Diagnostico ou None se ocorrer erro
     """
     try:
-        url = f"http://diagnostico:8080/api/diagnosticos/{diagnostico_id}"
+        url = f"{DIAGNOSTICO_URL}/api/diagnosticos/{diagnostico_id}"
         response = requests.get(url, timeout=5)
         response.raise_for_status()
         
@@ -221,7 +226,7 @@ def obter_plano_acao(plano_id):
         Objeto PlanoAcao ou None se ocorrer erro
     """
     try:
-        url = f"http://gerador-acoes:8080/api/acoes/planos/{plano_id}"
+        url = f"{GERADOR_ACOES_URL}/api/acoes/planos/{plano_id}"
         response = requests.get(url, timeout=5)
         response.raise_for_status()
         
@@ -672,9 +677,9 @@ def verificar_servicos_dependentes():
     Retorna True se todos os serviços estiverem disponíveis.
     """
     servicos = {
-        "monitoramento": "http://monitoramento:8081/health",
-        "diagnostico": "http://diagnostico:8083/health",
-        "gerador-acoes": "http://gerador-acoes:8082/health"
+        "monitoramento": f"{MONITORAMENTO_URL}/health",
+        "diagnostico": f"{DIAGNOSTICO_URL}/health",
+        "gerador-acoes": f"{GERADOR_ACOES_URL}/health"
     }
     
     for nome, url in servicos.items():

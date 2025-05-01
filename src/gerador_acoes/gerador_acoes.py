@@ -701,4 +701,4 @@ if __name__ == "__main__":
             return jsonify({"error": str(e)}), 500
     
     # Inicia o servidor
-    app.run(host='0.0.0.0', port=8082)
+    app.run(host='0.0.0.0', port=8080)

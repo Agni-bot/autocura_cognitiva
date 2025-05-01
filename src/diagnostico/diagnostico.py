@@ -17,6 +17,7 @@ import random
 import math
 from datetime import datetime
 import requests
+import os
 
 # Configuração de logging
 logging.basicConfig(
@@ -25,6 +26,9 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("DiagnosticoRedeNeural")
+
+# Configuração das URLs dos serviços
+MONITORAMENTO_URL = os.getenv('MONITORAMENTO_URL', 'http://monitoramento:8080')
 
 # Classe local para substituir importação direta
 @dataclass
@@ -76,9 +80,13 @@ def obter_metricas_do_monitoramento(metrica_id=None):
         
     Returns:
         Lista de métricas ou uma métrica específica
+        
+    Raises:
+        ValueError: Se os dados retornados forem inválidos
+        requests.exceptions.RequestException: Em caso de erro na requisição
     """
     try:
-        base_url = "http://monitoramento:8080/api/metricas"
+        base_url = f"{MONITORAMENTO_URL}/api/metricas"
         if metrica_id:
             url = f"{base_url}/{metrica_id}"
         else:

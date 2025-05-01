@@ -18,3 +18,76 @@
  * Running on http://172.19.0.5:8080
 2025-05-01 19:00:33,346 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
 2025-05-01 19:00:53,785 - werkzeug - INFO - 172.19.0.1 - - [01/May/2025 19:00:53] "GET /health HTTP/1.1" 200 -
+2025-05-01 19:12:41,153 - Observabilidade4D - INFO - VisualizadorHolografico inicializado com diretório de saída: visualizacoes
+2025-05-01 19:12:41,156 - Observabilidade4D - ERROR - Erro ao conectar com serviço monitoramento: HTTPConnectionPool(host='monitoramento', port=8081): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f3aa93afc10>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 19:12:41,156 - Observabilidade4D - WARNING - Alguns serviços dependentes não estão disponíveis. Continuando com funcionalidade limitada...
+2025-05-01 19:12:41,158 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.18.0.5:8080
+2025-05-01 19:12:41,158 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-01 19:14:12,983 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 19:14:12] "GET /health HTTP/1.1" 200 -
+2025-05-01 19:16:41,373 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 19:16:41] "[33mGET / HTTP/1.1[0m" 404 -
+2025-05-01 19:16:42,113 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 19:16:42] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-05-01 19:18:16,775 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 19:18:16] "GET /health HTTP/1.1" 200 -
+2025-05-01 19:24:25,808 - Observabilidade4D - INFO - VisualizadorHolografico inicializado com diretório de saída: visualizacoes
+2025-05-01 19:24:25,810 - Observabilidade4D - ERROR - Erro ao conectar com serviço monitoramento: HTTPConnectionPool(host='monitoramento', port=8081): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f24701aec10>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 19:24:25,810 - Observabilidade4D - WARNING - Alguns serviços dependentes não estão disponíveis. Continuando com funcionalidade limitada...
+2025-05-01 19:24:25,813 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.18.0.5:8080
+2025-05-01 19:24:25,813 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-01 19:25:26,365 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 19:25:26] "GET /health HTTP/1.1" 200 -
+2025-05-01 19:30:13,668 - Observabilidade4D - ERROR - Erro ao obter métricas do monitoramento: 404 Client Error: Not Found for url: http://monitoramento:8080/api/metricas
+2025-05-01 19:30:13,669 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 19:30:13] "GET /api/v1/metricas HTTP/1.1" 200 -
+2025-05-01 19:33:56,498 - Observabilidade4D - INFO - VisualizadorHolografico inicializado com diretório de saída: visualizacoes
+2025-05-01 19:33:56,500 - Observabilidade4D - ERROR - Erro ao conectar com serviço monitoramento: HTTPConnectionPool(host='monitoramento', port=8081): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7facaf9afc10>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 19:33:56,500 - Observabilidade4D - WARNING - Alguns serviços dependentes não estão disponíveis. Continuando com funcionalidade limitada...
+2025-05-01 19:33:56,502 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.18.0.5:8080
+2025-05-01 19:33:56,503 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-01 19:34:01,272 - Observabilidade4D - ERROR - Erro ao obter métricas do monitoramento: HTTPConnectionPool(host='monitoramento', port=8081): Max retries exceeded with url: /api/metricas (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7facaf964ee0>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 19:34:01,273 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 19:34:01] "GET /api/v1/metricas HTTP/1.1" 200 -
+2025-05-01 19:36:33,597 - Observabilidade4D - ERROR - Erro ao obter métricas do monitoramento: HTTPConnectionPool(host='monitoramento', port=8081): Max retries exceeded with url: /api/metricas (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7facaf91a220>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 19:36:33,598 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 19:36:33] "GET /api/v1/metricas HTTP/1.1" 200 -
+2025-05-01 19:36:37,760 - Observabilidade4D - ERROR - Erro ao conectar com serviço monitoramento: HTTPConnectionPool(host='monitoramento', port=8081): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7facaf9038b0>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 19:36:37,761 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 19:36:37] "GET /api/v1/status HTTP/1.1" 200 -
+2025-05-01 19:46:26,803 - Observabilidade4D - INFO - VisualizadorHolografico inicializado com diretório de saída: visualizacoes
+2025-05-01 19:46:26,807 - Observabilidade4D - ERROR - Erro ao conectar com serviço diagnostico: HTTPConnectionPool(host='diagnostico', port=8080): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f715e5a0460>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 19:46:26,808 - Observabilidade4D - WARNING - Alguns serviços dependentes não estão disponíveis. Continuando com funcionalidade limitada...
+2025-05-01 19:46:26,810 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.18.0.5:8080
+2025-05-01 19:46:26,810 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-01 20:02:51,969 - Observabilidade4D - INFO - VisualizadorHolografico inicializado com diretório de saída: visualizacoes
+2025-05-01 20:02:51,974 - Observabilidade4D - ERROR - Erro ao conectar com serviço diagnostico: HTTPConnectionPool(host='diagnostico', port=8080): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7fbf2d9a0460>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 20:02:51,974 - Observabilidade4D - WARNING - Alguns serviços dependentes não estão disponíveis. Continuando com funcionalidade limitada...
+2025-05-01 20:02:51,977 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.18.0.5:8080
+2025-05-01 20:02:51,977 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-01 20:21:59,651 - Observabilidade4D - INFO - VisualizadorHolografico inicializado com diretório de saída: visualizacoes
+2025-05-01 20:21:59,655 - Observabilidade4D - ERROR - Erro ao conectar com serviço diagnostico: HTTPConnectionPool(host='diagnostico', port=8080): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7fae403a0460>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 20:21:59,656 - Observabilidade4D - WARNING - Alguns serviços dependentes não estão disponíveis. Continuando com funcionalidade limitada...
+2025-05-01 20:21:59,661 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.18.0.5:8080
+2025-05-01 20:21:59,662 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-01 20:24:15,637 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 20:24:15] "[33mGET /api/v1/status%20(para%20ver%20o%20status%20da%20observabilidade) HTTP/1.1[0m" 404 -
+2025-05-01 20:24:15,903 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 20:24:15] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-05-01 20:29:29,241 - Observabilidade4D - INFO - VisualizadorHolografico inicializado com diretório de saída: visualizacoes
+2025-05-01 20:29:29,245 - Observabilidade4D - ERROR - Erro ao conectar com serviço diagnostico: HTTPConnectionPool(host='diagnostico', port=8080): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f3726d71a30>: Failed to establish a new connection: [Errno 111] Connection refused'))
+2025-05-01 20:29:29,245 - Observabilidade4D - WARNING - Alguns serviços dependentes não estão disponíveis. Continuando com funcionalidade limitada...
+2025-05-01 20:29:29,248 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://172.18.0.5:8080
+2025-05-01 20:29:29,248 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-01 20:29:37,100 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 20:29:37] "[33mGET /api/v1/status%20(para%20ver%20o%20status%20da%20observabilidade) HTTP/1.1[0m" 404 -
+2025-05-01 20:31:04,757 - werkzeug - INFO - 172.18.0.1 - - [01/May/2025 20:31:04] "GET /api/v1/status HTTP/1.1" 200 -

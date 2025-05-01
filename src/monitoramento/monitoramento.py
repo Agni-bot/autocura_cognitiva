@@ -5,12 +5,13 @@ import threading
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Any, Tuple, Optional, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections import deque
 import logging
 import json
 from datetime import datetime
 from fastapi import FastAPI
+import random
 
 # Configuração do FastAPI
 app = FastAPI(title="Monitoramento Multidimensional")
@@ -23,10 +24,7 @@ logging.basicConfig(
 
 logger = logging.getLogger("MonitoramentoMultidimensional")
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
+# Estruturas de dados para métricas
 @dataclass
 class MetricaDimensional:
     """
@@ -36,23 +34,29 @@ class MetricaDimensional:
     cada métrica é um prisma que refrata a realidade operacional
     em dimensões que transcendem o óbvio.
     """
+    id: str
     nome: str
     valor: float
     timestamp: float
-    contexto: Dict[str, Any]
     dimensao: str
     unidade: str
+    tags: Dict[str, str] = field(default_factory=dict)
+    metadados: Dict[str, Any] = field(default_factory=dict)
+    contexto: Dict[str, Any] = field(default_factory=dict)
     confianca: float = 1.0
     
     def to_dict(self) -> Dict[str, Any]:
         """Converte a métrica para formato de dicionário."""
         return {
+            "id": self.id,
             "nome": self.nome,
             "valor": self.valor,
             "timestamp": self.timestamp,
-            "contexto": self.contexto,
             "dimensao": self.dimensao,
             "unidade": self.unidade,
+            "tags": self.tags,
+            "metadados": self.metadados,
+            "contexto": self.contexto,
             "confianca": self.confianca
         }
     
@@ -60,15 +64,57 @@ class MetricaDimensional:
     def from_dict(cls, data: Dict[str, Any]) -> 'MetricaDimensional':
         """Cria uma instância de métrica a partir de um dicionário."""
         return cls(
+            id=data["id"],
             nome=data["nome"],
             valor=data["valor"],
             timestamp=data["timestamp"],
-            contexto=data["contexto"],
             dimensao=data["dimensao"],
             unidade=data["unidade"],
+            tags=data.get("tags", {}),
+            metadados=data.get("metadados", {}),
+            contexto=data.get("contexto", {}),
             confianca=data.get("confianca", 1.0)
         )
 
+# Armazenamento de métricas em memória
+metricas_store: List[MetricaDimensional] = []
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": time.time()}
+
+@app.get("/api/metricas")
+async def get_metricas():
+    # Se não houver métricas, gerar algumas de exemplo
+    if not metricas_store:
+        metricas_store.extend([
+            MetricaDimensional(
+                id=f"metric_{i}",
+                nome=nome,
+                valor=random.uniform(0, 100),
+                timestamp=time.time(),
+                dimensao=dim,
+                unidade=unidade,
+                tags={"ambiente": "producao"},
+                metadados={"fonte": "simulador"}
+            )
+            for i, (nome, dim, unidade) in enumerate([
+                ("cpu_usage", "recursos", "percentual"),
+                ("memory_usage", "recursos", "percentual"),
+                ("latency", "performance", "ms"),
+                ("throughput", "performance", "rps"),
+                ("error_rate", "qualidade", "percentual")
+            ])
+        ])
+    
+    return [metric.__dict__ for metric in metricas_store]
+
+@app.get("/api/metricas/{metrica_id}")
+async def get_metrica(metrica_id: str):
+    for metrica in metricas_store:
+        if metrica.id == metrica_id:
+            return metrica.__dict__
+    return {"error": "Métrica não encontrada"}, 404
 
 class ColetorBase:
     """
@@ -165,19 +211,19 @@ class ColetorThroughput(ColetorBase):
             
             # Criação das métricas
             metrica_instantanea = MetricaDimensional(
+                id=f"{self.nome}_instantaneo",
                 nome=f"{self.nome}_instantaneo",
                 valor=taxa,
                 timestamp=agora,
-                contexto={"tipo": "instantaneo"},
                 dimensao="throughput",
                 unidade="ops/s"
             )
             
             metrica_media = MetricaDimensional(
+                id=f"{self.nome}_media_movel",
                 nome=f"{self.nome}_media_movel",
                 valor=media_movel,
                 timestamp=agora,
-                contexto={"tipo": "media_movel", "janela": self.janela_media},
                 dimensao="throughput",
                 unidade="ops/s"
             )
@@ -227,10 +273,10 @@ class ColetorErros(ColetorBase):
                 }
                 
                 metrica = MetricaDimensional(
+                    id=f"{self.nome}_{categoria}",
                     nome=f"{self.nome}_{categoria}",
                     valor=contador,
                     timestamp=agora,
-                    contexto=contexto_agregado,
                     dimensao="erros",
                     unidade="contagem"
                 )
@@ -283,19 +329,19 @@ class ColetorLatencia(ColetorBase):
             
             # Cria métricas para média e mediana
             metrica_media = MetricaDimensional(
+                id=f"{self.nome}_media",
                 nome=f"{self.nome}_media",
                 valor=media,
                 timestamp=agora,
-                contexto={"tipo": "media", "amostras": len(valores)},
                 dimensao="latencia",
                 unidade="ms"
             )
             
             metrica_mediana = MetricaDimensional(
+                id=f"{self.nome}_mediana",
                 nome=f"{self.nome}_mediana",
                 valor=mediana,
                 timestamp=agora,
-                contexto={"tipo": "mediana", "amostras": len(valores)},
                 dimensao="latencia",
                 unidade="ms"
             )
@@ -305,10 +351,10 @@ class ColetorLatencia(ColetorBase):
             # Cria métricas para percentis
             for i, p in enumerate(self.percentis):
                 metrica_percentil = MetricaDimensional(
+                    id=f"{self.nome}_p{p}",
                     nome=f"{self.nome}_p{p}",
                     valor=percentis_calc[i],
                     timestamp=agora,
-                    contexto={"tipo": "percentil", "percentil": p, "amostras": len(valores)},
                     dimensao="latencia",
                     unidade="ms"
                 )
@@ -395,15 +441,10 @@ class ColetorRecursosFractais(ColetorBase):
                 variacao = np.std(valores) if len(valores) > 1 else 0
                 
                 metrica = MetricaDimensional(
+                    id=f"{self.nome}_{dimensao}_escala_{escala}",
                     nome=f"{self.nome}_{dimensao}_escala_{escala}",
                     valor=media,
                     timestamp=agora,
-                    contexto={
-                        "dimensao": dimensao,
-                        "escala": escala,
-                        "variacao": variacao,
-                        "amostras": len(valores)
-                    },
                     dimensao="recursos",
                     unidade="percentual"
                 )
@@ -415,13 +456,10 @@ class ColetorRecursosFractais(ColetorBase):
                 dim_fractal = self._calcular_dimensao_fractal(todos_valores)
                 
                 metrica_fractal = MetricaDimensional(
+                    id=f"{self.nome}_{dimensao}_dimensao_fractal",
                     nome=f"{self.nome}_{dimensao}_dimensao_fractal",
                     valor=dim_fractal,
                     timestamp=agora,
-                    contexto={
-                        "dimensao": dimensao,
-                        "amostras": len(todos_valores)
-                    },
                     dimensao="fractal",
                     unidade="dimensao"
                 )
@@ -656,12 +694,13 @@ class ProcessadorContexto:
         with self.lock:
             # Cria cópia da métrica para não modificar a original
             nova_metrica = MetricaDimensional(
+                id=metrica.id,
                 nome=metrica.nome,
                 valor=metrica.valor,
                 timestamp=metrica.timestamp,
-                contexto=metrica.contexto.copy(),
                 dimensao=metrica.dimensao,
                 unidade=metrica.unidade,
+                contexto=metrica.contexto.copy(),
                 confianca=metrica.confianca
             )
             
@@ -798,4 +837,27 @@ class AnalisadorFluxoContínuo:
 # Exemplo de uso
 if __name__ == "__main__":
     import uvicorn
+    
+    # Inicializa os coletores
+    coletor_throughput = ColetorThroughput("api_requests", intervalo=5.0)
+    coletor_erros = ColetorErros("api_errors", intervalo=5.0)
+    coletor_latencia = ColetorLatencia("api_latencia", intervalo=5.0)
+    
+    # Inicia os coletores
+    logger.info("Módulo random importado com sucesso")
+    logger.info(f"Coletor {coletor_throughput.nome} inicializado com intervalo de {coletor_throughput.intervalo}s")
+    logger.info(f"Coletor {coletor_erros.nome} inicializado com intervalo de {coletor_erros.intervalo}s")
+    logger.info(f"Coletor {coletor_latencia.nome} inicializado com intervalo de {coletor_latencia.intervalo}s")
+    
+    coletor_throughput.iniciar()
+    coletor_erros.iniciar()
+    coletor_latencia.iniciar()
+    
+    # Registra algumas operações para teste
+    logger.info("Tentando registrar operação com random.randint")
+    valor = random.randint(1, 10)
+    logger.info(f"Valor gerado: {valor}")
+    coletor_throughput.registrar_operacao(valor)
+    
+    # Inicia o servidor
     uvicorn.run(app, host="0.0.0.0", port=8080)
