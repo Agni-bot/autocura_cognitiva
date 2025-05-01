@@ -7,25 +7,18 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copiar o código-fonte
-COPY main.go main.go
+COPY setup.go setup.go
 COPY api/ api/
-COPY controllers/ controllers/
-
-# Instalar controller-gen
-RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
-
-# Gerar código CRD e DeepCopy
-RUN controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
-RUN controller-gen crd paths="./..." output:crd:artifacts:config=config/crd/bases
+COPY controller/ controller/
 
 # Compilar
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o healing-operator setup.go
 
 # Imagem final
 FROM alpine:3.16
 
 WORKDIR /
-COPY --from=builder /workspace/manager .
+COPY --from=builder /workspace/healing-operator .
 USER 65532:65532
 
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/healing-operator"]
