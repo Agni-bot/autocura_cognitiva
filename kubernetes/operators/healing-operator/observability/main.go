@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -26,9 +29,19 @@ type ObservabilityServer struct {
 }
 
 func NewObservabilityServer() (*ObservabilityServer, error) {
+	// Tenta primeiro usar a configuração in-cluster
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("erro ao criar configuração in-cluster: %v", err)
+		// Se falhar, tenta usar a configuração local
+		home := os.Getenv("USERPROFILE") // Para Windows
+		if home == "" {
+			home = os.Getenv("HOME") // Para Unix
+		}
+		kubeconfig := filepath.Join(home, ".kube", "config")
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return nil, fmt.Errorf("erro ao criar configuração: %v", err)
+		}
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
