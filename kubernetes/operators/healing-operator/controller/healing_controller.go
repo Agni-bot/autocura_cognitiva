@@ -1,4 +1,4 @@
-package controllers
+package controller
 
 import (
 	"context"
@@ -23,15 +23,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	healingv1 "github.com/autocura-cognitiva/healing-operator/api/v1"
+	healingv1 "healing-operator/api/v1"
 )
 
-// HealingReconciler reconcilia um objeto HealingPolicy
+// HealingReconciler reconcilia um objeto Healing
 type HealingReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Scheme *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=healing.autocura-cognitiva.io,resources=healingpolicies,verbs=get;list;watch;create;update;patch;delete
@@ -40,50 +40,22 @@ type HealingReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;delete
 
-// Reconcile é parte da interface reconcile.Reconciler
+// Reconcile é o loop principal do controller
 func (r *HealingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.Info("Reconciliando HealingPolicy", "namespacedName", req.NamespacedName)
+	logger := log.FromContext(ctx)
+	logger.Info("Reconciling Healing", "request", req)
 
-	// Obter o objeto HealingPolicy
-	var healingPolicy healingv1.HealingPolicy
-	if err := r.Get(ctx, req.NamespacedName, &healingPolicy); err != nil {
-		if errors.IsNotFound(err) {
-			// O objeto foi excluído, nada a fazer
-			return ctrl.Result{}, nil
-		}
-		log.Error(err, "Falha ao obter HealingPolicy")
-		return ctrl.Result{}, err
-	}
+	// Lógica de healing aqui
+	// Por enquanto apenas um log
+	logger.Info("Healing check completed")
 
-	// Implementar a lógica de healing aqui
-	// ...
-
-	// Atualizar o status
-	healingPolicy.Status.LastAppliedTime = &metav1.Time{Time: time.Now()}
-	healingPolicy.Status.LastAppliedStatus = "Succeeded"
-	healingPolicy.Status.LastAppliedMessage = "Healing aplicado com sucesso"
-	healingPolicy.Status.AppliedCount++
-
-	if err := r.Status().Update(ctx, &healingPolicy); err != nil {
-		log.Error(err, "Falha ao atualizar status do HealingPolicy")
-		return ctrl.Result{}, err
-	}
-
-	// Reagendar a reconciliação com base no intervalo de verificação
-	interval := time.Duration(healingPolicy.Spec.CheckInterval) * time.Second
-	if interval == 0 {
-		interval = 5 * time.Minute // Valor padrão
-	}
-
-	return ctrl.Result{RequeueAfter: interval}, nil
+	// Reagendar próxima verificação em 5 minutos
+	return ctrl.Result{RequeueAfter: time.Minute * 5}, nil
 }
 
 // SetupWithManager configura o controller com o Manager
 func (r *HealingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&healingv1.HealingPolicy{}).
-		Watches(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{}).
-		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{}).
+		For(&healingv1.Healing{}).
 		Complete(r)
 }
