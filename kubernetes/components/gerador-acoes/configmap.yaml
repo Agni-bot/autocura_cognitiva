@@ -40,3 +40,11 @@ data:
       parallel_simulations: 8
       max_simulation_time: 300
       confidence_threshold: 0.85
+    # Novas configurações
+    score_minimo: 0.3
+    timeout_api: 5
+    max_acoes_redesign: 2
+    prioridade_hotfix: 0.8
+    prioridade_refatoracao: 0.5
+    prioridade_redesign: 0.3
+    api_token: "seu_token_aqui"  # Substitua pelo token real em produção

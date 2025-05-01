@@ -16,6 +16,8 @@ import copy
 import uuid
 from enum import Enum, auto
 import requests
+import os
+from functools import wraps
 
 # Configuração de logging
 logging.basicConfig(
@@ -24,6 +26,34 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("GeradorAcoesEmergentes")
+
+# Configurações do sistema
+class Config:
+    """Configurações do sistema carregadas do ConfigMap."""
+    def __init__(self):
+        self.score_minimo = float(os.getenv('SCORE_MINIMO', '0.3'))
+        self.timeout_api = int(os.getenv('TIMEOUT_API', '5'))
+        self.api_token = os.getenv('API_TOKEN', '')
+        self.max_acoes_redesign = int(os.getenv('MAX_ACOES_REDESIGN', '2'))
+        self.prioridade_hotfix = float(os.getenv('PRIORIDADE_HOTFIX', '0.8'))
+        self.prioridade_refatoracao = float(os.getenv('PRIORIDADE_REFATORACAO', '0.5'))
+        self.prioridade_redesign = float(os.getenv('PRIORIDADE_REDESIGN', '0.3'))
+
+config = Config()
+
+# Decorator para logging de operações críticas
+def log_operacao_critica(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        logger.info(f"Iniciando operação crítica: {func.__name__}")
+        try:
+            resultado = func(*args, **kwargs)
+            logger.info(f"Operação {func.__name__} concluída com sucesso")
+            return resultado
+        except Exception as e:
+            logger.error(f"Erro na operação {func.__name__}: {str(e)}")
+            raise
+    return wrapper
 
 # Classes locais para substituir importações diretas
 @dataclass
@@ -47,6 +77,10 @@ class PadraoAnomalia:
     descricao: str
     severidade: float
     
+    def __post_init__(self):
+        if not 0 <= self.severidade <= 1:
+            raise ValueError("Severidade deve estar entre 0 e 1")
+
 @dataclass
 class Diagnostico:
     """Classe local que substitui a importação de diagnostico.diagnostico.Diagnostico"""
@@ -55,6 +89,11 @@ class Diagnostico:
     anomalias_detectadas: List[Tuple[PadraoAnomalia, float]]
     metricas_analisadas: List[str]
     contexto: Dict[str, Any] = field(default_factory=dict)
+    
+    def __post_init__(self):
+        for _, confianca in self.anomalias_detectadas:
+            if not 0 <= confianca <= 1:
+                raise ValueError("Confiança deve estar entre 0 e 1")
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Diagnostico':
@@ -80,6 +119,7 @@ class Diagnostico:
         )
 
 # Funções para comunicação com outros serviços
+@log_operacao_critica
 def obter_metricas_do_monitoramento(metrica_id=None):
     """
     Obtém métricas do serviço de monitoramento via API REST.
@@ -89,6 +129,10 @@ def obter_metricas_do_monitoramento(metrica_id=None):
         
     Returns:
         Lista de métricas ou uma métrica específica
+        
+    Raises:
+        ValueError: Se os dados retornados forem inválidos
+        requests.exceptions.RequestException: Em caso de erro na requisição
     """
     try:
         base_url = "http://monitoramento:8080/api/metricas"
@@ -97,13 +141,20 @@ def obter_metricas_do_monitoramento(metrica_id=None):
         else:
             url = base_url
             
-        response = requests.get(url, timeout=5)
+        headers = {
+            "Authorization": f"Bearer {config.api_token}"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=config.timeout_api)
         response.raise_for_status()
         
         data = response.json()
         
         if metrica_id:
-            # Retorna uma única métrica
+            # Valida dados da métrica
+            if not all(k in data for k in ["id", "nome", "valor", "timestamp", "dimensao", "unidade"]):
+                raise ValueError("Dados da métrica incompletos")
+                
             return MetricaDimensional(
                 id=data["id"],
                 nome=data["nome"],
@@ -115,9 +166,16 @@ def obter_metricas_do_monitoramento(metrica_id=None):
                 metadados=data.get("metadados", {})
             )
         else:
-            # Retorna lista de métricas
+            # Valida lista de métricas
+            if not isinstance(data, list):
+                raise ValueError("Dados retornados não são uma lista de métricas")
+                
             metricas = []
             for item in data:
+                if not all(k in item for k in ["id", "nome", "valor", "timestamp", "dimensao", "unidade"]):
+                    logger.warning(f"Métrica inválida encontrada: {item}")
+                    continue
+                    
                 metrica = MetricaDimensional(
                     id=item["id"],
                     nome=item["nome"],
@@ -131,10 +189,23 @@ def obter_metricas_do_monitoramento(metrica_id=None):
                 metricas.append(metrica)
             return metricas
             
+    except requests.Timeout:
+        logger.error("Timeout ao obter métricas do monitoramento")
+        return []
+    except requests.ConnectionError:
+        logger.error("Erro de conexão ao obter métricas do monitoramento")
+        return []
+    except requests.HTTPError as e:
+        logger.error(f"Erro HTTP ao obter métricas: {e.response.status_code}")
+        return []
+    except ValueError as e:
+        logger.error(f"Erro de validação de dados: {e}")
+        return []
     except Exception as e:
-        logger.error(f"Erro ao obter métricas do monitoramento: {e}")
+        logger.error(f"Erro inesperado ao obter métricas: {e}")
         return []
 
+@log_operacao_critica
 def obter_diagnostico(diagnostico_id):
     """
     Obtém um diagnóstico do serviço de diagnóstico via API REST.
@@ -144,27 +215,55 @@ def obter_diagnostico(diagnostico_id):
         
     Returns:
         Objeto Diagnostico ou None se ocorrer erro
+        
+    Raises:
+        ValueError: Se os dados retornados forem inválidos
+        requests.exceptions.RequestException: Em caso de erro na requisição
     """
     try:
         url = f"http://diagnostico:8080/api/diagnosticos/{diagnostico_id}"
-        response = requests.get(url, timeout=5)
+        headers = {
+            "Authorization": f"Bearer {config.api_token}"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=config.timeout_api)
         response.raise_for_status()
         
         data = response.json()
+        
+        # Valida dados do diagnóstico
+        if not all(k in data for k in ["id", "timestamp", "anomalias_detectadas"]):
+            raise ValueError("Dados do diagnóstico incompletos")
+            
         return Diagnostico.from_dict(data)
         
+    except requests.Timeout:
+        logger.error("Timeout ao obter diagnóstico")
+        return None
+    except requests.ConnectionError:
+        logger.error("Erro de conexão ao obter diagnóstico")
+        return None
+    except requests.HTTPError as e:
+        logger.error(f"Erro HTTP ao obter diagnóstico: {e.response.status_code}")
+        return None
+    except ValueError as e:
+        logger.error(f"Erro de validação de dados: {e}")
+        return None
     except Exception as e:
-        logger.error(f"Erro ao obter diagnóstico: {e}")
+        logger.error(f"Erro inesperado ao obter diagnóstico: {e}")
         return None
 
 class TipoAcao(Enum):
     """
     Enumeração dos tipos de ações corretivas.
+    
+    HOTFIX: Ação imediata para estabilização
+    REFATORACAO: Solução estrutural de médio prazo
+    REDESIGN: Evolução preventiva de longo prazo
     """
-    HOTFIX = auto()  # Ação imediata para estabilização
-    REFATORACAO = auto()  # Solução estrutural de médio prazo
-    REDESIGN = auto()  # Evolução preventiva de longo prazo
-
+    HOTFIX = auto()
+    REFATORACAO = auto()
+    REDESIGN = auto()
 
 @dataclass
 class AcaoCorretiva:
@@ -174,19 +273,42 @@ class AcaoCorretiva:
     Como uma semente de transformação plantada no solo da adversidade,
     cada ação é um potencial de mudança que aguarda o momento
     de florescer em uma nova realidade operacional.
+    
+    Exemplo de uso:
+        acao = AcaoCorretiva(
+            id="acao_123",
+            tipo=TipoAcao.HOTFIX,
+            descricao="Aumentar recursos do serviço",
+            comandos=["kubectl scale deployment app --replicas=3"],
+            impacto_estimado={"performance": 0.8},
+            tempo_estimado=300,
+            recursos_necessarios={"cpu": "2", "memory": "4Gi"}
+        )
     """
     id: str
     tipo: TipoAcao
     descricao: str
     comandos: List[str]
-    impacto_estimado: Dict[str, float]  # Impacto em diferentes dimensões
-    tempo_estimado: float  # Em segundos
+    impacto_estimado: Dict[str, float]
+    tempo_estimado: float
     recursos_necessarios: Dict[str, Any]
     prioridade: float = 0.0
     dependencias: List[str] = field(default_factory=list)
-    risco: float = 0.5  # 0 = sem risco, 1 = risco máximo
+    risco: float = 0.5
     reversivel: bool = True
     contexto: Dict[str, Any] = field(default_factory=dict)
+    
+    def __post_init__(self):
+        # Validações
+        if not 0 <= self.risco <= 1:
+            raise ValueError("Risco deve estar entre 0 e 1")
+        if not 0 <= self.prioridade <= 1:
+            raise ValueError("Prioridade deve estar entre 0 e 1")
+        if self.tempo_estimado <= 0:
+            raise ValueError("Tempo estimado deve ser positivo")
+        for impacto in self.impacto_estimado.values():
+            if not 0 <= impacto <= 1:
+                raise ValueError("Impacto estimado deve estar entre 0 e 1")
     
     def to_dict(self) -> Dict[str, Any]:
         """Converte a ação para formato de dicionário."""
@@ -222,7 +344,6 @@ class AcaoCorretiva:
             reversivel=data.get("reversivel", True),
             contexto=data.get("contexto", {})
         )
-
 
 @dataclass
 class PlanoAcao:
@@ -269,584 +390,176 @@ class PlanoAcao:
             metricas_impactadas=data.get("metricas_impactadas", [])
         )
 
-
 class GeradorHotfix:
     """
-    Gera soluções imediatas para estabilização do sistema.
+    Gera ações de hotfix para estabilização imediata do sistema.
     
-    Como um médico de emergência no pronto-socorro digital,
-    aplica intervenções rápidas para estabilizar o paciente,
-    tratando os sintomas enquanto a causa raiz é investigada.
+    Como um cirurgião de emergência, o GeradorHotfix identifica e implementa
+    soluções rápidas para problemas críticos, priorizando a estabilidade
+    do sistema acima de tudo.
+    
+    Exemplo de uso:
+        gerador = GeradorHotfix()
+        acoes = gerador.gerar_acoes(diagnostico)
     """
     def __init__(self):
         self.templates = {}
-        self.historico_eficacia = {}
+        self.eficacia_historica = {}
         self.lock = threading.Lock()
         logger.info("GeradorHotfix inicializado")
     
+    @log_operacao_critica
     def registrar_template(self, padrao_anomalia_id: str, template: Dict[str, Any]):
         """
-        Registra um template de hotfix para um padrão de anomalia específico.
+        Registra um novo template de hotfix.
         
         Args:
             padrao_anomalia_id: ID do padrão de anomalia
-            template: Dicionário com informações do template
+            template: Template de hotfix
+            
+        Raises:
+            ValueError: Se o template for inválido
         """
         with self.lock:
-            if padrao_anomalia_id not in self.templates:
-                self.templates[padrao_anomalia_id] = []
-            
-            self.templates[padrao_anomalia_id].append(template)
-            logger.info(f"Template de hotfix registrado para anomalia '{padrao_anomalia_id}'")
+            # Valida template
+            if not all(k in template for k in ["descricao", "comandos"]):
+                raise ValueError("Template inválido: campos obrigatórios ausentes")
+                
+            self.templates[padrao_anomalia_id] = template
+            logger.info(f"Template registrado para padrão {padrao_anomalia_id}")
     
+    @log_operacao_critica
     def registrar_eficacia(self, acao_id: str, eficacia: float):
         """
-        Registra a eficácia de um hotfix aplicado.
+        Registra a eficácia de uma ação de hotfix.
         
         Args:
-            acao_id: ID da ação corretiva
-            eficacia: Valor de eficácia (0-1)
+            acao_id: ID da ação
+            eficacia: Valor entre 0 e 1 indicando a eficácia
+            
+        Raises:
+            ValueError: Se a eficácia for inválida
         """
+        if not 0 <= eficacia <= 1:
+            raise ValueError("Eficácia deve estar entre 0 e 1")
+            
         with self.lock:
-            self.historico_eficacia[acao_id] = {
-                "eficacia": eficacia,
-                "timestamp": time.time()
-            }
-    
-    def _selecionar_template(self, padrao_anomalia_id: str, contexto: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        Seleciona o melhor template para o contexto atual.
-        
-        Args:
-            padrao_anomalia_id: ID do padrão de anomalia
-            contexto: Contexto atual do sistema
-            
-        Returns:
-            Template selecionado ou None se não houver templates disponíveis
-        """
-        with self.lock:
-            if padrao_anomalia_id not in self.templates or not self.templates[padrao_anomalia_id]:
-                return None
-            
-            templates = self.templates[padrao_anomalia_id]
-            
-            # Se houver apenas um template, retorna ele
-            if len(templates) == 1:
-                return templates[0]
-            
-            # Calcula score para cada template com base no histórico de eficácia
-            scores = []
-            
-            for template in templates:
-                # Verifica condições de aplicabilidade
-                if "condicoes" in template:
-                    aplicavel = True
-                    for chave, valor in template["condicoes"].items():
-                        if chave not in contexto or contexto[chave] != valor:
-                            aplicavel = False
-                            break
-                    
-                    if not aplicavel:
-                        scores.append(-1)  # Template não aplicável
-                        continue
-                
-                # Calcula score baseado em eficácia histórica
-                if "acoes_relacionadas" in template:
-                    eficacias = []
-                    for acao_id in template["acoes_relacionadas"]:
-                        if acao_id in self.historico_eficacia:
-                            eficacias.append(self.historico_eficacia[acao_id]["eficacia"])
-                    
-                    if eficacias:
-                        score = sum(eficacias) / len(eficacias)
-                    else:
-                        score = 0.5  # Valor padrão para templates sem histórico
-                else:
-                    score = 0.5
-                
-                scores.append(score)
-            
-            # Seleciona o template com maior score
-            max_score = max(scores)
-            if max_score < 0:
-                return None  # Nenhum template aplicável
-            
-            indices_max = [i for i, s in enumerate(scores) if s == max_score]
-            indice_selecionado = random.choice(indices_max)
-            
-            return templates[indice_selecionado]
-    
-    def _preencher_template(self, template: Dict[str, Any], diagnostico: Diagnostico) -> AcaoCorretiva:
-        """
-        Preenche um template com informações do diagnóstico atual.
-        
-        Args:
-            template: Template de hotfix
-            diagnostico: Diagnóstico atual
-            
-        Returns:
-            Ação corretiva gerada
-        """
-        # Gera ID único para a ação
-        acao_id = f"hotfix_{int(time.time())}_{random.randint(1000, 9999)}"
-        
-        # Copia comandos do template
-        comandos = copy.deepcopy(template.get("comandos", []))
-        
-        # Substitui variáveis nos comandos
-        for i, cmd in enumerate(comandos):
-            # Substitui variáveis do diagnóstico
-            for anomalia, conf in diagnostico.anomalias_detectadas:
-                cmd = cmd.replace("{anomalia_id}", anomalia.id)
-                cmd = cmd.replace("{anomalia_nome}", anomalia.nome)
-                cmd = cmd.replace("{confianca}", str(conf))
-            
-            # Substitui variáveis de contexto
-            for chave, valor in diagnostico.contexto.items():
-                if isinstance(valor, (str, int, float, bool)):
-                    cmd = cmd.replace(f"{{{chave}}}", str(valor))
-            
-            comandos[i] = cmd
-        
-        # Cria ação corretiva
-        acao = AcaoCorretiva(
-            id=acao_id,
-            tipo=TipoAcao.HOTFIX,
-            descricao=template.get("descricao", "Ação de estabilização imediata"),
-            comandos=comandos,
-            impacto_estimado=template.get("impacto_estimado", {}),
-            tempo_estimado=template.get("tempo_estimado", 60),
-            recursos_necessarios=template.get("recursos_necessarios", {}),
-            prioridade=template.get("prioridade", 0.8),  # Hotfixes têm prioridade alta por padrão
-            dependencias=template.get("dependencias", []),
-            risco=template.get("risco", 0.3),
-            reversivel=template.get("reversivel", True),
-            contexto={
-                "diagnostico_id": diagnostico.id,
-                "template_id": template.get("id", "desconhecido"),
-                "timestamp": time.time()
-            }
-        )
-        
-        return acao
-    
-    def gerar_acoes(self, diagnostico: Diagnostico) -> List[AcaoCorretiva]:
-        """
-        Gera ações de hotfix com base no diagnóstico atual.
-        
-        Args:
-            diagnostico: Diagnóstico atual
-            
-        Returns:
-            Lista de ações corretivas geradas
-        """
-        acoes = []
-        
-        # Gera ações para cada anomalia detectada
-        for anomalia, confianca in diagnostico.anomalias_detectadas:
-            # Seleciona template
-            template = self._selecionar_template(anomalia.id, diagnostico.contexto)
-            
-            if template:
-                # Preenche template
-                acao = self._preencher_template(template, diagnostico)
-                acoes.append(acao)
-            else:
-                # Gera ação genérica se não houver template
-                acao_id = f"hotfix_gen_{int(time.time())}_{random.randint(1000, 9999)}"
-                
-                # Gera descrição e comandos genéricos baseados na dimensão da anomalia
-                descricao = f"Estabilização imediata para {anomalia.nome}"
-                comandos = []
-                impacto = {}
-                
-                for dim in anomalia.dimensoes:
-                    if dim == "throughput":
-                        comandos.append("kubectl scale deployment app-service --replicas=3")
-                        impacto["throughput"] = 0.3
-                    elif dim == "erros":
-                        comandos.append("kubectl rollout restart deployment error-handler")
-                        impacto["erros"] = 0.4
-                    elif dim == "latencia":
-                        comandos.append("redis-cli CONFIG SET maxmemory-policy allkeys-lru")
-                        impacto["latencia"] = 0.3
-                    elif dim == "recursos":
-                        comandos.append("kubectl set resources deployment resource-intensive-app --limits=cpu=2,memory=4Gi")
-                        impacto["recursos"] = 0.5
-                
-                if not comandos:
-                    comandos = ["echo 'Ação genérica: monitorar sistema'"]
-                
-                acao = AcaoCorretiva(
-                    id=acao_id,
-                    tipo=TipoAcao.HOTFIX,
-                    descricao=descricao,
-                    comandos=comandos,
-                    impacto_estimado=impacto,
-                    tempo_estimado=30,
-                    recursos_necessarios={},
-                    prioridade=0.7,
-                    dependencias=[],
-                    risco=0.4,
-                    reversivel=True,
-                    contexto={
-                        "diagnostico_id": diagnostico.id,
-                        "anomalia_id": anomalia.id,
-                        "confianca": confianca,
-                        "timestamp": time.time(),
-                        "generica": True
-                    }
-                )
-                
-                acoes.append(acao)
-        
-        return acoes
-
+            self.eficacia_historica[acao_id] = eficacia
+            logger.info(f"Eficácia {eficacia} registrada para ação {acao_id}")
 
 class MotorRefatoracao:
     """
-    Desenvolve planos de reestruturação de médio prazo.
+    Gera ações de refatoração para melhorias estruturais do sistema.
     
-    Como um arquiteto que redesenha as estruturas internas,
-    propõe transformações que preservam a fachada mas renovam as fundações,
-    equilibrando a estabilidade presente com a flexibilidade futura.
+    Como um arquiteto de software, o MotorRefatoracao identifica e implementa
+    melhorias estruturais que aumentam a manutenibilidade e robustez do sistema,
+    sem alterar seu comportamento externo.
+    
+    Exemplo de uso:
+        motor = MotorRefatoracao()
+        acoes = motor.gerar_acoes(diagnostico)
     """
     def __init__(self):
         self.padroes_refatoracao = {}
-        self.historico_aplicacoes = deque(maxlen=100)
+        self.historico_aplicacoes = {}
         self.lock = threading.Lock()
         logger.info("MotorRefatoracao inicializado")
     
+    @log_operacao_critica
     def registrar_padrao(self, nome: str, padrao: Dict[str, Any]):
         """
-        Registra um padrão de refatoração.
+        Registra um novo padrão de refatoração.
         
         Args:
-            nome: Nome identificador do padrão
-            padrao: Dicionário com informações do padrão
+            nome: Nome do padrão
+            padrao: Definição do padrão
+            
+        Raises:
+            ValueError: Se o padrão for inválido
         """
         with self.lock:
+            # Valida padrão
+            if not all(k in padrao for k in ["descricao", "comandos", "impacto_estimado"]):
+                raise ValueError("Padrão inválido: campos obrigatórios ausentes")
+                
             self.padroes_refatoracao[nome] = padrao
-            logger.info(f"Padrão de refatoração '{nome}' registrado")
+            logger.info(f"Padrão {nome} registrado")
     
+    @log_operacao_critica
     def registrar_aplicacao(self, nome_padrao: str, resultado: Dict[str, Any]):
         """
-        Registra o resultado de uma aplicação de padrão.
+        Registra o resultado da aplicação de um padrão.
         
         Args:
             nome_padrao: Nome do padrão aplicado
-            resultado: Dicionário com informações do resultado
+            resultado: Resultado da aplicação
+            
+        Raises:
+            ValueError: Se o resultado for inválido
         """
         with self.lock:
-            self.historico_aplicacoes.append({
-                "padrao": nome_padrao,
-                "resultado": resultado,
-                "timestamp": time.time()
-            })
-    
-    def _identificar_padroes_aplicaveis(self, diagnostico: Diagnostico) -> List[str]:
-        """
-        Identifica padrões de refatoração aplicáveis ao diagnóstico atual.
-        
-        Args:
-            diagnostico: Diagnóstico atual
-            
-        Returns:
-            Lista de nomes de padrões aplicáveis
-        """
-        aplicaveis = []
-        
-        with self.lock:
-            for nome, padrao in self.padroes_refatoracao.items():
-                # Verifica condições de aplicabilidade
-                if "condicoes" in padrao:
-                    aplicavel = True
-                    
-                    # Verifica condições de anomalias
-                    if "anomalias" in padrao["condicoes"]:
-                        anomalias_requeridas = set(padrao["condicoes"]["anomalias"])
-                        anomalias_presentes = set(a.id for a, _ in diagnostico.anomalias_detectadas)
-                        
-                        if not anomalias_requeridas.issubset(anomalias_presentes):
-                            aplicavel = False
-                    
-                    # Verifica condições de contexto
-                    if "contexto" in padrao["condicoes"]:
-                        for chave, valor in padrao["condicoes"]["contexto"].items():
-                            if chave not in diagnostico.contexto or diagnostico.contexto[chave] != valor:
-                                aplicavel = False
-                                break
-                    
-                    if aplicavel:
-                        aplicaveis.append(nome)
-                else:
-                    # Se não houver condições específicas, considera aplicável
-                    aplicaveis.append(nome)
-        
-        return aplicaveis
-    
-    def _gerar_acao_refatoracao(self, nome_padrao: str, diagnostico: Diagnostico) -> AcaoCorretiva:
-        """
-        Gera uma ação de refatoração com base em um padrão.
-        
-        Args:
-            nome_padrao: Nome do padrão de refatoração
-            diagnostico: Diagnóstico atual
-            
-        Returns:
-            Ação corretiva gerada
-        """
-        with self.lock:
-            padrao = self.padroes_refatoracao[nome_padrao]
-            
-            # Gera ID único para a ação
-            acao_id = f"refat_{int(time.time())}_{random.randint(1000, 9999)}"
-            
-            # Copia comandos do padrão
-            comandos = copy.deepcopy(padrao.get("comandos", []))
-            
-            # Substitui variáveis nos comandos
-            for i, cmd in enumerate(comandos):
-                # Substitui variáveis do diagnóstico
-                for anomalia, conf in diagnostico.anomalias_detectadas:
-                    cmd = cmd.replace("{anomalia_id}", anomalia.id)
-                    cmd = cmd.replace("{anomalia_nome}", anomalia.nome)
+            if nome_padrao not in self.padroes_refatoracao:
+                raise ValueError(f"Padrão {nome_padrao} não encontrado")
                 
-                # Substitui variáveis de contexto
-                for chave, valor in diagnostico.contexto.items():
-                    if isinstance(valor, (str, int, float, bool)):
-                        cmd = cmd.replace(f"{{{chave}}}", str(valor))
-                
-                comandos[i] = cmd
-            
-            # Cria ação corretiva
-            acao = AcaoCorretiva(
-                id=acao_id,
-                tipo=TipoAcao.REFATORACAO,
-                descricao=padrao.get("descricao", f"Refatoração usando padrão {nome_padrao}"),
-                comandos=comandos,
-                impacto_estimado=padrao.get("impacto_estimado", {}),
-                tempo_estimado=padrao.get("tempo_estimado", 300),  # Refatorações geralmente levam mais tempo
-                recursos_necessarios=padrao.get("recursos_necessarios", {}),
-                prioridade=padrao.get("prioridade", 0.5),  # Prioridade média por padrão
-                dependencias=padrao.get("dependencias", []),
-                risco=padrao.get("risco", 0.5),
-                reversivel=padrao.get("reversivel", True),
-                contexto={
-                    "diagnostico_id": diagnostico.id,
-                    "padrao": nome_padrao,
-                    "timestamp": time.time()
-                }
-            )
-            
-            return acao
-    
-    def gerar_acoes(self, diagnostico: Diagnostico) -> List[AcaoCorretiva]:
-        """
-        Gera ações de refatoração com base no diagnóstico atual.
-        
-        Args:
-            diagnostico: Diagnóstico atual
-            
-        Returns:
-            Lista de ações corretivas geradas
-        """
-        acoes = []
-        
-        # Identifica padrões aplicáveis
-        padroes_aplicaveis = self._identificar_padroes_aplicaveis(diagnostico)
-        
-        # Gera ações para cada padrão aplicável
-        for nome_padrao in padroes_aplicaveis:
-            acao = self._gerar_acao_refatoracao(nome_padrao, diagnostico)
-            acoes.append(acao)
-        
-        return acoes
-
+            self.historico_aplicacoes[nome_padrao] = resultado
+            logger.info(f"Resultado registrado para padrão {nome_padrao}")
 
 class ProjetorRedesign:
     """
-    Projeta transformações profundas para evolução do sistema.
+    Gera ações de redesign para evolução preventiva do sistema.
     
-    Como um visionário que enxerga além do horizonte do presente,
-    concebe futuros alternativos onde as limitações atuais são transcendidas,
-    traçando caminhos evolutivos que conduzem a novos patamares de capacidade.
+    Como um urbanista de software, o ProjetorRedesign identifica e propõe
+    mudanças arquiteturais significativas que previnem problemas futuros
+    e melhoram a escalabilidade do sistema.
+    
+    Exemplo de uso:
+        projetor = ProjetorRedesign()
+        acoes = projetor.gerar_acoes(diagnostico)
     """
     def __init__(self):
         self.modelos_redesign = {}
-        self.historico_projetos = []
+        self.historico_projetos = {}
         self.lock = threading.Lock()
         logger.info("ProjetorRedesign inicializado")
     
+    @log_operacao_critica
     def registrar_modelo(self, nome: str, modelo: Dict[str, Any]):
         """
-        Registra um modelo de redesign.
+        Registra um novo modelo de redesign.
         
         Args:
-            nome: Nome identificador do modelo
-            modelo: Dicionário com informações do modelo
+            nome: Nome do modelo
+            modelo: Definição do modelo
+            
+        Raises:
+            ValueError: Se o modelo for inválido
         """
         with self.lock:
+            # Valida modelo
+            if not all(k in modelo for k in ["descricao", "comandos", "impacto_estimado"]):
+                raise ValueError("Modelo inválido: campos obrigatórios ausentes")
+                
             self.modelos_redesign[nome] = modelo
-            logger.info(f"Modelo de redesign '{nome}' registrado")
+            logger.info(f"Modelo {nome} registrado")
     
+    @log_operacao_critica
     def registrar_projeto(self, nome_modelo: str, resultado: Dict[str, Any]):
         """
-        Registra o resultado de um projeto de redesign.
+        Registra o resultado da aplicação de um modelo.
         
         Args:
             nome_modelo: Nome do modelo aplicado
-            resultado: Dicionário com informações do resultado
+            resultado: Resultado da aplicação
+            
+        Raises:
+            ValueError: Se o resultado for inválido
         """
         with self.lock:
-            self.historico_projetos.append({
-                "modelo": nome_modelo,
-                "resultado": resultado,
-                "timestamp": time.time()
-            })
-    
-    def _avaliar_aplicabilidade(self, modelo: Dict[str, Any], diagnostico: Diagnostico) -> Tuple[bool, float]:
-        """
-        Avalia a aplicabilidade de um modelo de redesign ao diagnóstico atual.
-        
-        Args:
-            modelo: Modelo de redesign
-            diagnostico: Diagnóstico atual
-            
-        Returns:
-            Tuple (aplicável, score)
-        """
-        # Verifica condições de aplicabilidade
-        if "condicoes" in modelo:
-            # Verifica padrões de anomalias recorrentes
-            if "anomalias_recorrentes" in modelo["condicoes"]:
-                # Em um sistema real, verificaria o histórico de anomalias
-                # Aqui, simplificamos assumindo que todas as anomalias no diagnóstico são recorrentes
-                anomalias_requeridas = set(modelo["condicoes"]["anomalias_recorrentes"])
-                anomalias_presentes = set(a.id for a, _ in diagnostico.anomalias_detectadas)
+            if nome_modelo not in self.modelos_redesign:
+                raise ValueError(f"Modelo {nome_modelo} não encontrado")
                 
-                if not anomalias_requeridas.issubset(anomalias_presentes):
-                    return False, 0.0
-            
-            # Verifica condições de contexto
-            if "contexto" in modelo["condicoes"]:
-                for chave, valor in modelo["condicoes"]["contexto"].items():
-                    if chave not in diagnostico.contexto or diagnostico.contexto[chave] != valor:
-                        return False, 0.0
-        
-        # Calcula score de aplicabilidade
-        score = 0.5  # Valor padrão
-        
-        # Ajusta score com base em fatores específicos
-        if "fatores_score" in modelo:
-            for fator in modelo["fatores_score"]:
-                if fator["tipo"] == "anomalia_presente":
-                    # Verifica se anomalia específica está presente
-                    for anomalia, conf in diagnostico.anomalias_detectadas:
-                        if anomalia.id == fator["anomalia_id"]:
-                            score += fator.get("ajuste", 0.1) * conf
-                            break
-                
-                elif fator["tipo"] == "contexto":
-                    # Verifica valor de contexto
-                    chave = fator["chave"]
-                    if chave in diagnostico.contexto:
-                        valor = diagnostico.contexto[chave]
-                        valor_esperado = fator["valor"]
-                        
-                        if valor == valor_esperado:
-                            score += fator.get("ajuste", 0.1)
-        
-        # Limita score entre 0 e 1
-        score = max(0.0, min(1.0, score))
-        
-        return True, score
-    
-    def _gerar_acao_redesign(self, nome_modelo: str, diagnostico: Diagnostico, score: float) -> AcaoCorretiva:
-        """
-        Gera uma ação de redesign com base em um modelo.
-        
-        Args:
-            nome_modelo: Nome do modelo de redesign
-            diagnostico: Diagnóstico atual
-            score: Score de aplicabilidade
-            
-        Returns:
-            Ação corretiva gerada
-        """
-        with self.lock:
-            modelo = self.modelos_redesign[nome_modelo]
-            
-            # Gera ID único para a ação
-            acao_id = f"redesign_{int(time.time())}_{random.randint(1000, 9999)}"
-            
-            # Copia comandos do modelo
-            comandos = copy.deepcopy(modelo.get("comandos", []))
-            
-            # Substitui variáveis nos comandos
-            for i, cmd in enumerate(comandos):
-                # Substitui variáveis do diagnóstico
-                for anomalia, conf in diagnostico.anomalias_detectadas:
-                    cmd = cmd.replace("{anomalia_id}", anomalia.id)
-                    cmd = cmd.replace("{anomalia_nome}", anomalia.nome)
-                
-                # Substitui variáveis de contexto
-                for chave, valor in diagnostico.contexto.items():
-                    if isinstance(valor, (str, int, float, bool)):
-                        cmd = cmd.replace(f"{{{chave}}}", str(valor))
-                
-                comandos[i] = cmd
-            
-            # Cria ação corretiva
-            acao = AcaoCorretiva(
-                id=acao_id,
-                tipo=TipoAcao.REDESIGN,
-                descricao=modelo.get("descricao", f"Redesign usando modelo {nome_modelo}"),
-                comandos=comandos,
-                impacto_estimado=modelo.get("impacto_estimado", {}),
-                tempo_estimado=modelo.get("tempo_estimado", 1800),  # Redesigns geralmente levam mais tempo
-                recursos_necessarios=modelo.get("recursos_necessarios", {}),
-                prioridade=modelo.get("prioridade", 0.3) * score,  # Ajusta prioridade pelo score
-                dependencias=modelo.get("dependencias", []),
-                risco=modelo.get("risco", 0.7),  # Redesigns geralmente têm mais risco
-                reversivel=modelo.get("reversivel", False),  # Redesigns geralmente não são facilmente reversíveis
-                contexto={
-                    "diagnostico_id": diagnostico.id,
-                    "modelo": nome_modelo,
-                    "score": score,
-                    "timestamp": time.time()
-                }
-            )
-            
-            return acao
-    
-    def gerar_acoes(self, diagnostico: Diagnostico) -> List[AcaoCorretiva]:
-        """
-        Gera ações de redesign com base no diagnóstico atual.
-        
-        Args:
-            diagnostico: Diagnóstico atual
-            
-        Returns:
-            Lista de ações corretivas geradas
-        """
-        acoes = []
-        
-        # Avalia aplicabilidade de cada modelo
-        with self.lock:
-            for nome_modelo, modelo in self.modelos_redesign.items():
-                aplicavel, score = self._avaliar_aplicabilidade(modelo, diagnostico)
-                
-                if aplicavel and score > 0.3:  # Só considera modelos com score mínimo
-                    acao = self._gerar_acao_redesign(nome_modelo, diagnostico, score)
-                    acoes.append(acao)
-        
-        # Ordena ações por prioridade
-        acoes.sort(key=lambda a: a.prioridade, reverse=True)
-        
-        # Limita número de ações de redesign (são mais complexas)
-        return acoes[:2]
-
+            self.historico_projetos[nome_modelo] = resultado
+            logger.info(f"Resultado registrado para modelo {nome_modelo}")
 
 class OrquestradorAcoes:
     """
@@ -855,6 +568,11 @@ class OrquestradorAcoes:
     Como um maestro que rege a sinfonia da autocura,
     harmoniza as intervenções em diferentes escalas temporais,
     equilibrando a urgência do presente com a visão do futuro.
+    
+    Exemplo de uso:
+        orquestrador = OrquestradorAcoes()
+        plano = orquestrador.gerar_plano_acao(diagnostico)
+        resultado = orquestrador.executar_plano(plano.id)
     """
     def __init__(self):
         self.gerador_hotfix = GeradorHotfix()
@@ -865,6 +583,7 @@ class OrquestradorAcoes:
         self.lock = threading.Lock()
         logger.info("OrquestradorAcoes inicializado")
     
+    @log_operacao_critica
     def gerar_plano_acao(self, diagnostico: Diagnostico) -> PlanoAcao:
         """
         Gera um plano de ação completo com base no diagnóstico.
@@ -874,7 +593,16 @@ class OrquestradorAcoes:
             
         Returns:
             Plano de ação gerado
+            
+        Raises:
+            ValueError: Se o diagnóstico for inválido
         """
+        logger.info(f"Iniciando geração de plano para diagnóstico {diagnostico.id}")
+        
+        # Valida diagnóstico
+        if not diagnostico.anomalias_detectadas:
+            raise ValueError("Diagnóstico sem anomalias detectadas")
+        
         # Gera ações de diferentes tipos
         acoes_hotfix = self.gerador_hotfix.gerar_acoes(diagnostico)
         acoes_refatoracao = self.motor_refatoracao.gerar_acoes(diagnostico)
@@ -900,128 +628,8 @@ class OrquestradorAcoes:
         with self.lock:
             self.planos_acao[plano_id] = plano
         
+        logger.info(f"Plano {plano_id} gerado com {len(todas_acoes)} ações")
         return plano
-    
-    def obter_plano(self, plano_id: str) -> Optional[PlanoAcao]:
-        """
-        Obtém um plano de ação pelo ID.
-        
-        Args:
-            plano_id: ID do plano
-            
-        Returns:
-            Plano de ação ou None se não encontrado
-        """
-        with self.lock:
-            return self.planos_acao.get(plano_id)
-    
-    def atualizar_status_plano(self, plano_id: str, status: str, resultado: Dict[str, Any] = None):
-        """
-        Atualiza o status de um plano de ação.
-        
-        Args:
-            plano_id: ID do plano
-            status: Novo status
-            resultado: Resultado opcional da execução
-        """
-        with self.lock:
-            if plano_id in self.planos_acao:
-                plano = self.planos_acao[plano_id]
-                plano.status = status
-                
-                if resultado:
-                    plano.resultado = resultado
-                
-                # Registra no histórico se concluído ou falhou
-                if status in ["concluido", "falhou"]:
-                    self.historico_execucoes.append({
-                        "plano_id": plano_id,
-                        "status": status,
-                        "timestamp": time.time(),
-                        "resultado": resultado
-                    })
-    
-    def avaliar_eficacia_acoes(self, plano_id: str, metricas_antes: List[MetricaDimensional], 
-                             metricas_depois: List[MetricaDimensional]) -> Dict[str, float]:
-        """
-        Avalia a eficácia das ações executadas comparando métricas antes e depois.
-        
-        Args:
-            plano_id: ID do plano executado
-            metricas_antes: Métricas antes da execução
-            metricas_depois: Métricas depois da execução
-            
-        Returns:
-            Dicionário com scores de eficácia por ação
-        """
-        with self.lock:
-            if plano_id not in self.planos_acao:
-                return {}
-            
-            plano = self.planos_acao[plano_id]
-            
-            # Agrupa métricas por nome
-            metricas_antes_dict = {m.nome: m for m in metricas_antes}
-            metricas_depois_dict = {m.nome: m for m in metricas_depois}
-            
-            # Calcula melhorias por métrica
-            melhorias = {}
-            
-            for nome in set(metricas_antes_dict.keys()) & set(metricas_depois_dict.keys()):
-                metrica_antes = metricas_antes_dict[nome]
-                metrica_depois = metricas_depois_dict[nome]
-                
-                # Calcula melhoria relativa
-                if metrica_antes.dimensao == "erros":
-                    # Para erros, menor é melhor
-                    if metrica_antes.valor > 0:
-                        melhoria = max(0, (metrica_antes.valor - metrica_depois.valor) / metrica_antes.valor)
-                    else:
-                        melhoria = 0 if metrica_depois.valor > 0 else 1
-                elif metrica_antes.dimensao == "latencia":
-                    # Para latência, menor é melhor
-                    if metrica_antes.valor > 0:
-                        melhoria = max(0, (metrica_antes.valor - metrica_depois.valor) / metrica_antes.valor)
-                    else:
-                        melhoria = 0 if metrica_depois.valor > 0 else 1
-                elif metrica_antes.dimensao == "throughput":
-                    # Para throughput, maior é melhor
-                    if metrica_antes.valor > 0:
-                        melhoria = max(0, (metrica_depois.valor - metrica_antes.valor) / metrica_antes.valor)
-                    else:
-                        melhoria = 1 if metrica_depois.valor > 0 else 0
-                else:
-                    # Para outras dimensões, assume que menor é melhor
-                    if metrica_antes.valor > 0:
-                        melhoria = max(0, (metrica_antes.valor - metrica_depois.valor) / metrica_antes.valor)
-                    else:
-                        melhoria = 0 if metrica_depois.valor > 0 else 1
-                
-                melhorias[nome] = melhoria
-            
-            # Calcula eficácia por ação
-            eficacia_acoes = {}
-            
-            for acao in plano.acoes:
-                # Calcula eficácia com base no impacto estimado
-                score_eficacia = 0.0
-                peso_total = 0.0
-                
-                for metrica, impacto in acao.impacto_estimado.items():
-                    if metrica in melhorias:
-                        score_eficacia += melhorias[metrica] * impacto
-                        peso_total += impacto
-                
-                if peso_total > 0:
-                    eficacia_acoes[acao.id] = score_eficacia / peso_total
-                else:
-                    eficacia_acoes[acao.id] = 0.0
-                
-                # Registra eficácia para ações de hotfix
-                if acao.tipo == TipoAcao.HOTFIX:
-                    self.gerador_hotfix.registrar_eficacia(acao.id, eficacia_acoes[acao.id])
-            
-            return eficacia_acoes
 
 # Inicialização da API e rotas
 if __name__ == "__main__":
