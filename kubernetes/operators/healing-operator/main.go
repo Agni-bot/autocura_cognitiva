@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	healingv1 "github.com/autocura-cognitiva/healing-operator/api/v1"
-	"github.com/autocura-cognitiva/healing-operator/controllers"
+	healingv1 "healing-operator/api/v1"
+	"healing-operator/controller"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -60,10 +60,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.HealingReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("healing-controller"),
+	if err = (&controller.HealingReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "HealingPolicy")
 		os.Exit(1)
@@ -84,4 +83,4 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
+} 

@@ -2,27 +2,11 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	healingv1 "healing-operator/api/v1"
@@ -45,9 +29,16 @@ func (r *HealingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling Healing", "request", req)
 
+	// Buscar o objeto Healing
+	var healing healingv1.Healing
+	if err := r.Get(ctx, req.NamespacedName, &healing); err != nil {
+		logger.Error(err, "unable to fetch Healing")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
 	// Lógica de healing aqui
 	// Por enquanto apenas um log
-	logger.Info("Healing check completed")
+	logger.Info("Healing check completed", "healing", healing.Name)
 
 	// Reagendar próxima verificação em 5 minutos
 	return ctrl.Result{RequeueAfter: time.Minute * 5}, nil
@@ -56,6 +47,6 @@ func (r *HealingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // SetupWithManager configura o controller com o Manager
 func (r *HealingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// Adicione aqui os recursos que você quer observar
+		For(&healingv1.Healing{}).
 		Complete(r)
 }

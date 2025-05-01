@@ -1,0 +1,39 @@
+# Binários para programas
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Arquivos de teste
+*.test
+
+# Arquivos de saída
+*.out
+
+# Arquivos de dependência
+vendor/
+
+# Arquivos de IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Arquivos de build
+bin/
+build/
+
+# Arquivos de log
+*.log
+
+# Arquivos de ambiente
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db 
