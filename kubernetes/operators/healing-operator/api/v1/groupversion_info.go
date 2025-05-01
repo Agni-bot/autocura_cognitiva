@@ -20,5 +20,5 @@ var (
 )
 
 func init() {
-	SchemeBuilder.Register(&HealingPolicy{}, &HealingPolicyList{})
+	SchemeBuilder.Register(&Healing{}, &HealingList{})
 }

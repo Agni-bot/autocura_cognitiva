@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	healingv1 "github.com/autocura-cognitiva/healing-operator/api/v1"
+	healingv1 "healing-operator/api/v1"
 )
 
 // HealingReconciler reconcilia um objeto Healing
