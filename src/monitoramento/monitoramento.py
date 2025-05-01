@@ -10,6 +10,10 @@ from collections import deque
 import logging
 import json
 from datetime import datetime
+from fastapi import FastAPI
+
+# Configuração do FastAPI
+app = FastAPI(title="Monitoramento Multidimensional")
 
 # Configuração de logging
 logging.basicConfig(
@@ -18,6 +22,10 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("MonitoramentoMultidimensional")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 @dataclass
 class MetricaDimensional:

@@ -22,4 +22,4 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["python", "-u", "monitoramento.py"]
+CMD ["uvicorn", "monitoramento:app", "--host", "0.0.0.0", "--port", "8080"]

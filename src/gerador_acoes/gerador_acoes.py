@@ -642,7 +642,7 @@ if __name__ == "__main__":
     
     @app.route('/health', methods=['GET'])
     def health_check():
-        return jsonify({"status": "healthy", "timestamp": time.time()})
+        return jsonify({"status": "healthy"})
     
     @app.route('/api/acoes/gerar', methods=['POST'])
     def gerar_acoes():
@@ -701,4 +701,4 @@ if __name__ == "__main__":
             return jsonify({"error": str(e)}), 500
     
     # Inicia o servidor
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host='0.0.0.0', port=8082)

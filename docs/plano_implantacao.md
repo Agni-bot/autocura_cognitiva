@@ -55,7 +55,7 @@ kubernetes/
 
 ## Namespace e RBAC
 
-Primeiro, vamos definir o namespace e as permissões necessárias para o sistema.
+Primeiro, vamos definir o namespace e as permissões necessárias.
 
 ### namespace.yaml
 ```yaml

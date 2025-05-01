@@ -2,19 +2,30 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Definir a variável de ambiente para o protobuf
-ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Instalar primeiro o protobuf e depois o tensorflow
-RUN pip install --no-cache-dir protobuf==3.20.3 tensorflow==2.7.0
-
+# Copiar requirements primeiro para aproveitar o cache do Docker
 COPY requirements.txt .
-# Remover tensorflow e protobuf do requirements.txt antes de instalar
-RUN sed -i '/tensorflow/d; /protobuf/d' requirements.txt && \
-    pip install --no-cache-dir -r requirements.txt
 
+# Instalar dependências Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar o código da aplicação
 COPY . .
 
-EXPOSE 8080
+# Definir variáveis de ambiente padrão
+ENV SCORE_MINIMO=0.3
+ENV TIMEOUT_API=5
+ENV MAX_ACOES_REDESIGN=2
+ENV PRIORIDADE_HOTFIX=0.8
+ENV PRIORIDADE_REFATORACAO=0.5
+ENV PRIORIDADE_REDESIGN=0.3
 
+# Expor a porta
+EXPOSE 8082
+
+# Comando para executar a aplicação
 CMD ["python", "gerador_acoes.py"]
