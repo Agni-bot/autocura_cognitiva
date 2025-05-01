@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	healingv1 "healing-operator/api/v1"
+	healingv1 "github.com/autocura-cognitiva/healing-operator/api/v1"
 )
 
 // HealingReconciler reconcilia um objeto Healing
@@ -56,6 +56,6 @@ func (r *HealingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // SetupWithManager configura o controller com o Manager
 func (r *HealingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&healingv1.Healing{}).
+		// Adicione aqui os recursos que você quer observar
 		Complete(r)
 }
