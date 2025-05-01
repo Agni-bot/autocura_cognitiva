@@ -19,8 +19,8 @@ spec:
       serviceAccountName: autocura-cognitiva-sa
       containers:
       - name: gerador-acoes
-        image: autocura-cognitiva/gerador-acoes:latest
-        imagePullPolicy: Always
+        image: gerador-acoes:local
+        imagePullPolicy: Never
         ports:
         - containerPort: 8082
           name: http
