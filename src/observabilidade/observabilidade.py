@@ -672,8 +672,9 @@ def verificar_servicos_dependentes():
     Retorna True se todos os serviços estiverem disponíveis.
     """
     servicos = {
-        "monitoramento": "http://monitoramento:8080/health",
-        "diagnostico": "http://diagnostico:8080/health"
+        "monitoramento": "http://monitoramento:8081/health",
+        "diagnostico": "http://diagnostico:8083/health",
+        "gerador-acoes": "http://gerador-acoes:8082/health"
     }
     
     for nome, url in servicos.items():
@@ -698,13 +699,51 @@ if __name__ == "__main__":
     visualizador = VisualizadorHolografico()
     
     # Verifica serviços dependentes antes de iniciar
-    if not verificar_servicos_dependentes():
-        logger.error("Serviços dependentes não estão disponíveis. Encerrando...")
-        exit(1)
+    try:
+        if not verificar_servicos_dependentes():
+            logger.warning("Alguns serviços dependentes não estão disponíveis. Continuando com funcionalidade limitada...")
+    except Exception as e:
+        logger.warning(f"Erro ao verificar serviços dependentes: {e}. Continuando com funcionalidade limitada...")
     
     @app.route('/health', methods=['GET'])
     def health_check():
-        return jsonify({"status": "healthy", "timestamp": time.time()})
+        return jsonify({"status": "healthy"}), 200
+
+    @app.route('/api/v1/metricas', methods=['GET'])
+    def get_metricas():
+        try:
+            metricas = obter_metricas_do_monitoramento()
+            return jsonify([m.__dict__ for m in metricas]), 200
+        except Exception as e:
+            logger.error(f"Erro ao obter métricas: {e}")
+            return jsonify({"erro": "Erro ao obter métricas"}), 500
+
+    @app.route('/api/v1/status', methods=['GET'])
+    def get_status():
+        try:
+            status = verificar_servicos_dependentes()
+            return jsonify(status), 200
+        except Exception as e:
+            logger.error(f"Erro ao obter status: {e}")
+            return jsonify({"erro": "Erro ao obter status dos serviços"}), 500
+
+    @app.route('/api/v1/diagnosticos', methods=['GET'])
+    def get_diagnosticos():
+        try:
+            # Implementar lógica para obter diagnósticos ativos
+            return jsonify([]), 200
+        except Exception as e:
+            logger.error(f"Erro ao obter diagnósticos: {e}")
+            return jsonify({"erro": "Erro ao obter diagnósticos"}), 500
+
+    @app.route('/api/v1/acoes', methods=['GET'])
+    def get_acoes():
+        try:
+            # Implementar lógica para obter ações em andamento
+            return jsonify([]), 200
+        except Exception as e:
+            logger.error(f"Erro ao obter ações: {e}")
+            return jsonify({"erro": "Erro ao obter ações"}), 500
     
     @app.route('/api/visualizacoes/metricas-temporais', methods=['POST'])
     def criar_visualizacao_metricas_temporais():

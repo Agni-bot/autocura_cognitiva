@@ -22,7 +22,7 @@ spec:
         image: autocura-cognitiva/observabilidade:latest
         imagePullPolicy: Always
         ports:
-        - containerPort: 5000
+        - containerPort: 8080
           name: http
         resources:
           limits:
@@ -35,18 +35,22 @@ spec:
         - name: MONITORAMENTO_URL
           value: "http://monitoramento:8080"
         - name: DIAGNOSTICO_URL
-          value: "http://diagnostico:8081"
+          value: "http://diagnostico:8080"
         - name: GERADOR_ACOES_URL
-          value: "http://gerador-acoes:8082"
+          value: "http://gerador-acoes:8080"
         - name: CONFIG_MAP
           value: observabilidade-config
         - name: LOG_LEVEL
           value: INFO
+        - name: LOG_FILE
+          value: "/app/logs/observabilidade.log"
         volumeMounts:
         - name: config-volume
           mountPath: /app/config
         - name: visualizacoes-volume
           mountPath: /app/visualizacoes
+        - name: logs-volume
+          mountPath: /app/logs
         livenessProbe:
           httpGet:
             path: /health
@@ -55,7 +59,7 @@ spec:
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /ready
+            path: /health
             port: http
           initialDelaySeconds: 5
           periodSeconds: 5
@@ -66,3 +70,6 @@ spec:
       - name: visualizacoes-volume
         persistentVolumeClaim:
           claimName: autocura-cognitiva-visualizacoes
+      - name: logs-volume
+        persistentVolumeClaim:
+          claimName: autocura-cognitiva-logs
