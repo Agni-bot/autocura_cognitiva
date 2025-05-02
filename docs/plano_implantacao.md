@@ -5,52 +5,89 @@ Este documento detalha o plano de implantação do Sistema de Autocura Cognitiva
 ## Estrutura de Diretórios
 
 ```
-kubernetes/
-├── base/                      # Configurações base compartilhadas
-│   ├── namespace.yaml         # Namespace dedicado
-│   ├── serviceaccount.yaml    # Conta de serviço com permissões necessárias
-│   ├── rbac/                  # Configurações de RBAC
-│   │   ├── role.yaml          # Papel com permissões necessárias
-│   │   └── rolebinding.yaml   # Vinculação de papel à conta de serviço
-│   └── configmap.yaml         # Configurações compartilhadas
-├── operators/                 # Operadores customizados
-│   ├── healing-operator/      # Operador de healing automático
-│   │   ├── crds/              # Custom Resource Definitions
-│   │   ├── controller/        # Controlador do operador
-│   │   └── deployment.yaml    # Implantação do operador
-│   └── rollback-operator/     # Operador de rollback probabilístico
-│       ├── crds/              # Custom Resource Definitions
-│       ├── controller/        # Controlador do operador
-│       └── deployment.yaml    # Implantação do operador
-├── components/                # Componentes do sistema
-│   ├── monitoramento/         # Módulo de monitoramento
-│   │   ├── deployment.yaml    # Implantação do módulo
-│   │   ├── service.yaml       # Serviço para o módulo
-│   │   └── configmap.yaml     # Configurações específicas
-│   ├── diagnostico/           # Módulo de diagnóstico
-│   │   ├── deployment.yaml    # Implantação do módulo
-│   │   ├── service.yaml       # Serviço para o módulo
-│   │   └── configmap.yaml     # Configurações específicas
-│   ├── gerador-acoes/         # Módulo gerador de ações
-│   │   ├── deployment.yaml    # Implantação do módulo
-│   │   ├── service.yaml       # Serviço para o módulo
-│   │   └── configmap.yaml     # Configurações específicas
-│   └── observabilidade/       # Módulo de observabilidade
-│       ├── deployment.yaml    # Implantação do módulo
-│       ├── service.yaml       # Serviço para o módulo
-│       ├── ingress.yaml       # Ingress para acesso externo
-│       └── configmap.yaml     # Configurações específicas
-├── storage/                   # Configurações de armazenamento
-│   ├── persistentvolume.yaml  # Volume persistente para dados
-│   └── persistentvolumeclaim.yaml # Reivindicação de volume persistente
-├── environments/              # Ambientes paralelos
-│   ├── production/            # Ambiente de produção
-│   │   └── kustomization.yaml # Customização para produção
-│   ├── staging/               # Ambiente de staging
-│   │   └── kustomization.yaml # Customização para staging
-│   └── development/           # Ambiente de desenvolvimento
-│       └── kustomization.yaml # Customização para desenvolvimento
-└── kustomization.yaml         # Configuração principal do Kustomize
+autocura_cognitiva/
+├── kubernetes/                    # Configurações Kubernetes
+│   ├── base/                      # Configurações base compartilhadas
+│   │   ├── namespace.yaml         # Namespace dedicado
+│   │   ├── serviceaccount.yaml    # Conta de serviço com permissões necessárias
+│   │   ├── rbac/                  # Configurações de RBAC
+│   │   │   ├── role.yaml          # Papel com permissões necessárias
+│   │   │   └── rolebinding.yaml   # Vinculação de papel à conta de serviço
+│   │   └── configmap.yaml         # Configurações compartilhadas
+│   ├── operators/                 # Operadores customizados
+│   │   ├── healing-operator/      # Operador de healing automático
+│   │   │   ├── crds/              # Custom Resource Definitions
+│   │   │   ├── controller/        # Controlador do operador
+│   │   │   └── deployment.yaml    # Implantação do operador
+│   │   └── rollback-operator/     # Operador de rollback probabilístico
+│   │       ├── crds/              # Custom Resource Definitions
+│   │       ├── controller/        # Controlador do operador
+│   │       └── deployment.yaml    # Implantação do operador
+│   ├── components/                # Componentes do sistema
+│   │   ├── monitoramento/         # Módulo de monitoramento
+│   │   │   ├── deployment.yaml    # Implantação do módulo
+│   │   │   ├── service.yaml       # Serviço para o módulo
+│   │   │   └── configmap.yaml     # Configurações específicas
+│   │   ├── diagnostico/           # Módulo de diagnóstico
+│   │   │   ├── deployment.yaml    # Implantação do módulo
+│   │   │   ├── service.yaml       # Serviço para o módulo
+│   │   │   └── configmap.yaml     # Configurações específicas
+│   │   ├── gerador-acoes/         # Módulo gerador de ações
+│   │   │   ├── deployment.yaml    # Implantação do módulo
+│   │   │   ├── service.yaml       # Serviço para o módulo
+│   │   │   └── configmap.yaml     # Configurações específicas
+│   │   └── observabilidade/       # Módulo de observabilidade
+│   │       ├── deployment.yaml    # Implantação do módulo
+│   │       ├── service.yaml       # Serviço para o módulo
+│   │       ├── ingress.yaml       # Ingress para acesso externo
+│   │       └── configmap.yaml     # Configurações específicas
+│   ├── storage/                   # Configurações de armazenamento
+│   │   ├── persistentvolume.yaml  # Volume persistente para dados
+│   │   └── persistentvolumeclaim.yaml # Reivindicação de volume persistente
+│   ├── environments/              # Ambientes paralelos
+│   │   ├── production/            # Ambiente de produção
+│   │   │   └── kustomization.yaml # Customização para produção
+│   │   ├── staging/               # Ambiente de staging
+│   │   │   └── kustomization.yaml # Customização para staging
+│   │   └── development/           # Ambiente de desenvolvimento
+│   │       └── kustomization.yaml # Customização para desenvolvimento
+│   └── kustomization.yaml         # Configuração principal do Kustomize
+├── kind-config/                   # Configurações do Kind (Kubernetes in Docker)
+│   ├── kind-config.yaml           # Configuração do cluster Kind
+│   └── setup-kind.cmd             # Script de configuração do ambiente Kind
+├── src/                           # Código fonte do sistema
+│   ├── monitoramento/             # Módulo de monitoramento
+│   │   ├── monitoramento.py       # Código principal do módulo
+│   │   ├── Dockerfile             # Dockerfile específico do módulo
+│   │   └── requirements.txt       # Dependências Python
+│   ├── diagnostico/               # Módulo de diagnóstico
+│   │   ├── diagnostico.py         # Código principal do módulo
+│   │   ├── Dockerfile             # Dockerfile específico do módulo
+│   │   └── requirements.txt       # Dependências Python
+│   ├── gerador_acoes/             # Módulo gerador de ações
+│   │   ├── gerador_acoes.py       # Código principal do módulo
+│   │   ├── Dockerfile             # Dockerfile específico do módulo
+│   │   └── requirements.txt       # Dependências Python
+│   └── observabilidade/           # Módulo de observabilidade
+│       ├── observabilidade.py     # Código principal do módulo
+│       ├── Dockerfile             # Dockerfile específico do módulo
+│       └── requirements.txt       # Dependências Python
+├── scripts/                       # Scripts do sistema
+│   └── build.cmd                  # Script de build
+├── config/                        # Configurações do sistema
+│   └── docker-compose.yml         # Configuração do Docker Compose
+├── tests/                         # Testes do sistema
+│   └── gerador_acoes_test.py      # Testes do módulo gerador de ações
+├── docs/                          # Documentação do sistema
+│   ├── plano_implantacao.md       # Plano de implantação em Kubernetes
+│   ├── analise_requisitos.md      # Análise de requisitos
+│   ├── arquitetura_modular.md     # Documentação da arquitetura modular
+│   ├── documentacao_completa.md   # Documentação completa do sistema
+│   ├── manual_usuario.md          # Manual do usuário
+│   └── protocolo_emergencia.md    # Protocolo de emergência
+├── logs/                          # Logs do sistema
+│   └── observabilidade.log        # Logs do módulo de observabilidade
+└── README.md                      # Documentação principal do projeto
 ```
 
 ## Namespace e RBAC

@@ -40,24 +40,6 @@ REM Adicionar limpeza em caso de erro
 setlocal enabledelayedexpansion
 set "error=0"
 
-REM Criar arquivo de configuração do kind
-echo kind: Cluster > kind-config.yaml
-echo apiVersion: kind.x-k8s.io/v1alpha4 >> kind-config.yaml
-echo name: autocura-cognitiva >> kind-config.yaml
-echo nodes: >> kind-config.yaml
-echo - role: control-plane >> kind-config.yaml
-echo   extraPortMappings: >> kind-config.yaml
-echo   - containerPort: 30000 >> kind-config.yaml
-echo     hostPort: 30000 >> kind-config.yaml
-echo     protocol: TCP >> kind-config.yaml
-echo   - containerPort: 30001 >> kind-config.yaml
-echo     hostPort: 30001 >> kind-config.yaml
-echo     protocol: TCP >> kind-config.yaml
-echo containerdConfigPatches: >> kind-config.yaml
-echo - |- >> kind-config.yaml
-echo   [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:5000"] >> kind-config.yaml
-echo     endpoint = ["http://registry:5000"] >> kind-config.yaml
-
 REM Verificar se o cluster já existe
 kind get clusters | findstr "autocura-cognitiva" >nul
 if %ERRORLEVEL% EQU 0 (
@@ -68,7 +50,6 @@ if %ERRORLEVEL% EQU 0 (
         kind delete cluster --name autocura-cognitiva
     ) else (
         echo Mantendo cluster existente. Configuração concluída!
-        del kind-config.yaml
         exit /b 0
     )
 )
@@ -112,9 +93,6 @@ echo Cluster kind 'autocura-cognitiva' criado com sucesso!
 REM Configurar kubectl para usar o contexto do kind
 kubectl cluster-info --context kind-autocura-cognitiva
 
-REM Limpar arquivo de configuração temporário
-del kind-config.yaml
-
 echo === Ambiente Kubernetes local configurado com sucesso! ===
 echo Agora você pode executar 'build.cmd' para construir as imagens e
-echo em seguida 'kubectl apply -k kubernetes\environments\development' para implantar o sistema.
+echo em seguida 'kubectl apply -k kubernetes\environments\development' para implantar o sistema. 
