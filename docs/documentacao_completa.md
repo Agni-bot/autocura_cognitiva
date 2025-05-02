@@ -196,6 +196,36 @@ A implementação do Service Mesh e Circuit Breaker está documentada em detalhe
 
 Para mais detalhes sobre a configuração e implementação, consulte a documentação específica da Fase 1.
 
+## 2.2.1.3 Bulkhead e Isolamento
+A implementação do Bulkhead e Isolamento está documentada em detalhes no arquivo [fase2_bulkhead.md](fase2_bulkhead.md). Esta implementação inclui:
+
+- Configuração do Bulkhead para isolamento de recursos
+- Implementação de namespaces dedicados
+- Isolamento de serviços e comunicação
+- Controle de tráfego granular
+
+Para mais detalhes sobre a configuração e implementação, consulte a documentação específica da Fase 2.
+
+## 2.2.1.4 CQRS e Otimização de Dados
+A implementação do CQRS e Otimização de Dados está documentada em detalhes no arquivo [fase3_cqrs.md](fase3_cqrs.md). Esta implementação inclui:
+
+- Separação de comandos e consultas (CQRS)
+- Implementação de cache para consultas
+- Limitação de taxa para comandos
+- Otimização de fluxo de dados
+
+Para mais detalhes sobre a configuração e implementação, consulte a documentação específica da Fase 3.
+
+## 2.2.1.5 Circuit Breaker e Retry
+A implementação do Circuit Breaker e Retry está documentada em detalhes no arquivo [fase4_circuit_breaker.md](fase4_circuit_breaker.md). Esta implementação inclui:
+
+- Configuração do Circuit Breaker para prevenção de falhas em cascata
+- Implementação de retry para recuperação automática
+- Balanceamento de carga inteligente
+- Monitoramento e controle de falhas
+
+Para mais detalhes sobre a configuração e implementação, consulte a documentação específica da Fase 4.
+
 ## Módulos Principais
 
 ### Monitoramento Multidimensional

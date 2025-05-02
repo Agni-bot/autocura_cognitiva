@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-metrics-config
+  namespace: autocura-cognitiva
+data:
+  metrics.yaml: |
+    metrics:
+      # Métricas de Monitoramento
+      - name: autocura_monitoramento_anomalias_detectadas_total
+        type: Counter
+        help: "Número total de anomalias detectadas"
+        labels:
+          - severity
+          - component
+          - type
+
+      - name: autocura_monitoramento_latencia_cognitiva
+        type: Histogram
+        help: "Latência do processamento cognitivo"
+        buckets: [0.1, 0.5, 1.0, 2.0, 5.0]
+        labels:
+          - operation
+          - component
+
+      # Métricas de Diagnóstico
+      - name: autocura_diagnostico_precisao
+        type: Gauge
+        help: "Precisão do diagnóstico em porcentagem"
+        labels:
+          - model
+          - component
+
+      - name: autocura_diagnostico_tempo_analise
+        type: Histogram
+        help: "Tempo de análise do diagnóstico"
+        buckets: [1.0, 5.0, 10.0, 30.0, 60.0]
+        labels:
+          - complexity
+          - type
+
+      # Métricas do Gerador de Ações
+      - name: autocura_acoes_geradas_total
+        type: Counter
+        help: "Número total de ações geradas"
+        labels:
+          - type
+          - priority
+          - status
+
+      - name: autocura_acoes_tempo_execucao
+        type: Histogram
+        help: "Tempo de execução das ações"
+        buckets: [0.5, 1.0, 2.0, 5.0, 10.0]
+        labels:
+          - action_type
+          - component
+
+      # Métricas de Circuit Breaker
+      - name: autocura_circuit_breaker_estado
+        type: Gauge
+        help: "Estado atual do circuit breaker (0=aberto, 1=fechado, 0.5=meio-aberto)"
+        labels:
+          - service
+          - endpoint
+
+      - name: autocura_circuit_breaker_falhas_total
+        type: Counter
+        help: "Número total de falhas que ativaram o circuit breaker"
+        labels:
+          - service
+          - type
+
+      # Métricas de Cache
+      - name: autocura_cache_hit_ratio
+        type: Gauge
+        help: "Taxa de acerto do cache"
+        labels:
+          - cache_type
+          - service
+
+      - name: autocura_cache_latencia
+        type: Histogram
+        help: "Latência das operações de cache"
+        buckets: [0.001, 0.005, 0.01, 0.05, 0.1]
+        labels:
+          - operation
+          - cache_type
+
+      # Métricas de Rate Limiting
+      - name: autocura_rate_limit_rejeicoes_total
+        type: Counter
+        help: "Número total de requisições rejeitadas por rate limiting"
+        labels:
+          - service
+          - endpoint
+
+      # Métricas de Retry
+      - name: autocura_retry_tentativas_total
+        type: Counter
+        help: "Número total de tentativas de retry"
+        labels:
+          - service
+          - operation
+          - status 
