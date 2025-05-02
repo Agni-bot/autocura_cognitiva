@@ -866,5 +866,9 @@ if __name__ == "__main__":
     def mostrar_relatorio():
         return render_template('relatorio.html')
     
+    @app.route('/', methods=['GET'])
+    def pagina_inicial():
+        return render_template('index.html')
+    
     # Inicia o servidor
     app.run(host='0.0.0.0', port=8080)

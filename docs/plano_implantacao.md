@@ -721,7 +721,7 @@ spec:
             memory: 256Mi
         env:
         - name: DIAGNOSTICO_URL
-          value: "http://diagnostico:8081"
+          value: "http://diagnostico:8080"
         - name: CONFIG_MAP
           valueFrom:
             configMapKeyRef:
@@ -793,9 +793,9 @@ spec:
         - name: MONITORAMENTO_URL
           value: "http://monitoramento:8080"
         - name: DIAGNOSTICO_URL
-          value: "http://diagnostico:8081"
+          value: "http://diagnostico:8080"
         - name: GERADOR_ACOES_URL
-          value: "http://gerador-acoes:8082"
+          value: "http://gerador-acoes:8080"
         - name: CONFIG_MAP
           valueFrom:
             configMapKeyRef:
@@ -1886,8 +1886,8 @@ data:
           - kubectl get pods -n autocura-cognitiva
           - kubectl get svc -n autocura-cognitiva
           - curl -s http://monitoramento:8080/health
-          - curl -s http://diagnostico:8081/health
-          - curl -s http://gerador-acoes:8082/health
+          - curl -s http://diagnostico:8080/health
+          - curl -s http://gerador-acoes:8080/health
           - curl -s http://observabilidade:5000/health
 ```
 

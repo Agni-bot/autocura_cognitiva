@@ -1,9 +1,12 @@
+from flask import Flask, jsonify
 import time
 import random
 import logging
 from dataclasses import dataclass
 from typing import Dict, List
 from datetime import datetime
+
+app = Flask(__name__)
 
 @dataclass
 class MetricasSistema:
@@ -70,19 +73,45 @@ class MonitoramentoMultidimensional:
         
         return anomalias
 
-# Exemplo de uso
+# Simula métricas multidimensionais
+NOMES = [
+    ("throughput", "operacional", "req/s"),
+    ("erros", "contextual", "%"),
+    ("latencia", "cognitiva", "ms"),
+    ("recursos", "fractal", "%")
+]
+
+def gerar_metricas():
+    timestamp = time.time()
+    metricas = []
+    for nome, dimensao, unidade in NOMES:
+        if nome == "throughput":
+            valor = random.uniform(80, 120)
+        elif nome == "erros":
+            valor = random.uniform(0, 5)
+        elif nome == "latencia":
+            valor = random.uniform(100, 300)
+        elif nome == "recursos":
+            valor = random.uniform(40, 90)
+        metricas.append({
+            "id": f"{nome}_{int(timestamp)}",
+            "nome": nome,
+            "valor": round(valor, 2),
+            "timestamp": timestamp,
+            "dimensao": dimensao,
+            "unidade": unidade,
+            "tags": {},
+            "metadados": {}
+        })
+    return metricas
+
+@app.route('/api/metricas', methods=['GET'])
+def api_metricas():
+    return jsonify(gerar_metricas())
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "healthy"})
+
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    monitor = MonitoramentoMultidimensional()
-    
-    # Simulação de coleta contínua
-    for _ in range(10):
-        metricas = monitor.coletar_metricas()
-        tendencias = monitor.analisar_tendencia()
-        anomalias = monitor.detectar_anomalias()
-        
-        print(f"\nMétricas coletadas: {metricas}")
-        print(f"Tendências: {tendencias}")
-        print(f"Anomalias detectadas: {anomalias}")
-        
-        time.sleep(1)  # Simula intervalo entre coletas 
+    app.run(host="0.0.0.0", port=8081) 
