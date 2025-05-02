@@ -1,0 +1,33 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: autocura-cognitiva-isolation
+  namespace: autocura-cognitiva
+spec:
+  hosts:
+  - monitoramento.autocura-cognitiva.svc.cluster.local
+  - diagnostico.autocura-cognitiva.svc.cluster.local
+  - gerador-acoes.autocura-cognitiva.svc.cluster.local
+  - observabilidade.autocura-cognitiva.svc.cluster.local
+  ports:
+  - number: 8080
+    name: http-monitoramento
+    protocol: HTTP
+    targetPort: 8080
+  - number: 8081
+    name: http-diagnostico
+    protocol: HTTP
+    targetPort: 8081
+  - number: 8082
+    name: http-gerador-acoes
+    protocol: HTTP
+    targetPort: 8082
+  - number: 5000
+    name: http-observabilidade
+    protocol: HTTP
+    targetPort: 5000
+  resolution: STATIC
+  location: MESH_INTERNAL
+  workloadSelector:
+    labels:
+      app: autocura-cognitiva 
