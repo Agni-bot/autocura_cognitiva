@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- base
+- components/monitoramento
+- components/diagnostico
+- components/gerador-acoes
+- components/observabilidade
+- operators/healing-operator
+- operators/rollback-operator
+- storage
+
+labels:
+  app.kubernetes.io/part-of: autocura-cognitiva
+  app.kubernetes.io/managed-by: kustomize
+
+namespace: autocura-cognitiva
+
+# Configurações de recursos e limites padrão para todos os pods
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+# Configurações de tolerância a falhas
+podDisruptionBudget:
+  minAvailable: 1
+
+# Configuração para seleção de ambiente
+# Descomente apenas um dos overlays abaixo para selecionar o ambiente desejado
+
+# Para ambiente de desenvolvimento:
+# patchesStrategicMerge:
+# - environments/development/kustomization.yaml
+
+# Para ambiente de staging:
+# patchesStrategicMerge:
+# - environments/staging/kustomization.yaml
+
+# Para ambiente de produção:
+# patchesStrategicMerge:
+# - environments/production/kustomization.yaml
