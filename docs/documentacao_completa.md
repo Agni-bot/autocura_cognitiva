@@ -186,6 +186,16 @@ A API do Gemini é integrada ao sistema através de dois módulos principais, co
 - Detecção de padrões complexos
 - Melhor compreensão do impacto das ações
 
+## 2.2.1.2 Service Mesh e Circuit Breaker
+A implementação do Service Mesh e Circuit Breaker está documentada em detalhes no arquivo [fase1_service_mesh.md](fase1_service_mesh.md). Esta implementação inclui:
+
+- Configuração do Istio como Service Mesh
+- Implementação de Circuit Breaker para resiliência
+- Configuração de mTLS para segurança
+- Políticas de tráfego e roteamento
+
+Para mais detalhes sobre a configuração e implementação, consulte a documentação específica da Fase 1.
+
 ## Módulos Principais
 
 ### Monitoramento Multidimensional
