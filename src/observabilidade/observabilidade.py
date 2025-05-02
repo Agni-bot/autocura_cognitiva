@@ -804,5 +804,67 @@ if __name__ == "__main__":
                 "timestamp": time.time()
             }), 500
     
+    @app.route('/api/v1/relatorio-completo', methods=['GET'])
+    def gerar_relatorio_completo():
+        try:
+            # Obtém métricas
+            metricas = obter_metricas_do_monitoramento()
+            
+            # Obtém diagnósticos
+            diagnosticos = obter_diagnosticos_ativos()
+            
+            # Obtém ações
+            acoes = obter_acoes_priorizadas()
+            
+            # Gera visualizações
+            visualizacao_metricas = visualizador.visualizar_metricas_temporais(
+                metricas=metricas,
+                titulo="Evolução Temporal das Métricas do Sistema",
+                agrupar_por_dimensao=True,
+                salvar=False
+            )
+            
+            visualizacao_correlacao = visualizador.visualizar_correlacao_metricas(
+                metricas=metricas,
+                titulo="Correlação entre Métricas do Sistema",
+                salvar=False
+            )
+            
+            # Prepara relatório
+            relatorio = {
+                "status_geral": {
+                    "timestamp": time.time(),
+                    "status_servicos": verificar_servicos_dependentes(),
+                    "metricas_ativas": len(metricas),
+                    "diagnosticos_ativos": len(diagnosticos),
+                    "acoes_pendentes": len(acoes)
+                },
+                "metricas": {
+                    "visualizacao_temporal": visualizacao_metricas,
+                    "visualizacao_correlacao": visualizacao_correlacao,
+                    "dados": [m.__dict__ for m in metricas]
+                },
+                "diagnosticos": [d.__dict__ for d in diagnosticos],
+                "acoes": [a.__dict__ for a in acoes],
+                "recomendacoes": {
+                    "curto_prazo": [a for a in acoes if a.tipo == "HOTFIX"],
+                    "medio_prazo": [a for a in acoes if a.tipo == "REFATORACAO"],
+                    "longo_prazo": [a for a in acoes if a.tipo == "REDESIGN"]
+                }
+            }
+            
+            return jsonify(relatorio), 200
+            
+        except Exception as e:
+            logger.error(f"Erro ao gerar relatório completo: {e}")
+            return jsonify({
+                "erro": str(e),
+                "timestamp": time.time()
+            }), 500
+    
+    @app.route('/relatorio', methods=['GET'])
+    def mostrar_relatorio():
+        return render_template('relatorio.html')
+    
     # Inicia o servidor
     app.run(host='0.0.0.0', port=8080)
