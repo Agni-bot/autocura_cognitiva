@@ -83,10 +83,6 @@ metricas_store: List[MetricaDimensional] = []
 async def health_check():
     return {"status": "healthy", "timestamp": time.time()}
 
-@app.get("/ready")
-async def readiness_check():
-    return {"status": "ready", "timestamp": time.time()}
-
 @app.get("/api/metricas")
 async def get_metricas():
     # Se não houver métricas, gerar algumas de exemplo
