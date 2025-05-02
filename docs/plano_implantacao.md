@@ -2374,3 +2374,140 @@ def update_actions_table(n):
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=5000, debug=True)
 ```
+
+## Configuração do Service Mesh e Circuit Breaker
+
+### 1. Instalação do Istio
+
+```yaml
+# kubernetes/istio/install.yaml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+  name: istio-control-plane
+spec:
+  profile: default
+  components:
+    pilot:
+      k8s:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2048Mi
+    ingressGateways:
+    - name: istio-ingressgateway
+      enabled: true
+      k8s:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+```
+
+### 2. Configuração do Circuit Breaker
+
+```yaml
+# kubernetes/istio/circuit-breaker.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: autocura-cognitiva-circuit-breaker
+  namespace: autocura-cognitiva
+spec:
+  host: "*.autocura-cognitiva.svc.cluster.local"
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 1024
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 10
+```
+
+### 3. Configuração de mTLS
+
+```yaml
+# kubernetes/istio/mtls.yaml
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: autocura-cognitiva-mtls
+  namespace: autocura-cognitiva
+spec:
+  mtls:
+    mode: STRICT
+```
+
+### 4. Políticas de Tráfego
+
+```yaml
+# kubernetes/istio/traffic-policy.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: autocura-cognitiva-traffic
+  namespace: autocura-cognitiva
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - istio-ingressgateway
+  http:
+  - match:
+    - uri:
+        prefix: /monitoramento
+    route:
+    - destination:
+        host: monitoramento
+        port:
+          number: 8080
+  - match:
+    - uri:
+        prefix: /diagnostico
+    route:
+    - destination:
+        host: diagnostico
+        port:
+          number: 8081
+  - match:
+    - uri:
+        prefix: /gerador-acoes
+    route:
+    - destination:
+        host: gerador-acoes
+        port:
+          number: 8082
+  - match:
+    - uri:
+        prefix: /observabilidade
+    route:
+    - destination:
+        host: observabilidade
+        port:
+          number: 5000
+```
+
+### 5. Monitoramento do Service Mesh
+
+```yaml
+# kubernetes/istio/monitoring.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istio-metrics
+  namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      istio: mixer
+  endpoints:
+  - port: http-monitoring
+    interval: 15s
+    path: /metrics
+```
