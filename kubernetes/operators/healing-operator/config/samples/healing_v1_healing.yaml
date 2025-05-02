@@ -1,7 +1,0 @@
-apiVersion: healing.autocura-cognitiva.io/v1
-kind: Healing
-metadata:
-  name: healing-sample
-spec:
-  # Intervalo de verificação em segundos
-  checkInterval: 300 
