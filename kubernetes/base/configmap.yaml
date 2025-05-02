@@ -9,6 +9,8 @@ data:
     metrics_interval=30
     enable_tracing=true
     tracing_endpoint=http://jaeger-collector:14268/api/traces
+    gemini_api_enabled=true
+    gemini_api_endpoint=https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent
     
   monitoramento.properties: |
     collection_interval=15
@@ -19,11 +21,13 @@ data:
     model_update_interval=3600
     confidence_threshold=0.75
     max_diagnosis_depth=5
+    gemini_analysis_enabled=true
     
   gerador_acoes.properties: |
     action_validation_enabled=true
     simulation_iterations=100
     risk_threshold=0.3
+    gemini_simulation_enabled=true
     
   observabilidade.properties: |
     dashboard_refresh_rate=10

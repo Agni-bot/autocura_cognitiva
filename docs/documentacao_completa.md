@@ -144,6 +144,48 @@ A arquitetura do sistema é guiada por cinco princípios fundamentais:
 
 5. **Resiliência Distribuída**: A resiliência não é centralizada, mas distribuída entre todos os componentes, eliminando pontos únicos de falha.
 
+### 2.2.1.1 Funcionamento da API do Gemini
+
+A API do Gemini é integrada ao sistema através de dois módulos principais, com configurações específicas para cada caso de uso:
+
+#### Configuração Geral
+- A chave da API é armazenada de forma segura no Secret `autocura-cognitiva-secrets`
+- O endpoint da API é configurado no ConfigMap global: `gemini_api_endpoint=https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent`
+- A ativação geral da API é controlada por `gemini_api_enabled=true`
+
+#### Módulo de Diagnóstico
+- Utilização: Análise avançada de anomalias
+- Configuração: `gemini_analysis_enabled=true`
+- Funcionalidades:
+  - Análise contextualizada de métricas e logs
+  - Identificação de padrões complexos
+  - Complementação do modelo de Isolation Forest
+  - Aumento da precisão diagnóstica
+
+#### Módulo Gerador de Ações
+- Utilização: Simulação e validação de ações
+- Configuração: `gemini_simulation_enabled=true`
+- Funcionalidades:
+  - Simulação de cenários de impacto
+  - Previsão de consequências não óbvias
+  - Geração de explicações naturais
+  - Criação de planos de rollback robustos
+
+#### Fluxo de Integração
+1. Detecção de anomalia pelo módulo de monitoramento
+2. Análise inicial pelo modelo de Isolation Forest
+3. Solicitação de análise adicional ao Gemini
+4. Processamento e retorno de insights pelo Gemini
+5. Simulação e validação de ações propostas
+6. Geração de recomendações finais combinadas
+
+#### Benefícios da Integração
+- Análise mais contextualizada dos problemas
+- Simulações mais realistas das ações
+- Explicações mais claras e naturais das decisões
+- Detecção de padrões complexos
+- Melhor compreensão do impacto das ações
+
 ## Módulos Principais
 
 ### Monitoramento Multidimensional
