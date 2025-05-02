@@ -866,6 +866,10 @@ if __name__ == "__main__":
     def mostrar_relatorio():
         return render_template('relatorio.html')
     
+    @app.route('/portal', methods=['GET'])
+    def portal_central():
+        return render_template('portal.html')
+    
     @app.route('/', methods=['GET'])
     def pagina_inicial():
         return render_template('index.html')
