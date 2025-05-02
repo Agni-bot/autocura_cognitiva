@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observabilidade-websocket
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: observabilidade-websocket
+  template:
+    metadata:
+      labels:
+        app: observabilidade-websocket
+    spec:
+      containers:
+      - name: websocket-server
+        image: observabilidade-websocket:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3001
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+        env:
+        - name: NODE_ENV
+          value: "production" 

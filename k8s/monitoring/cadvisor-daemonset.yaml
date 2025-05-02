@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cadvisor
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: cadvisor
+  template:
+    metadata:
+      labels:
+        app: cadvisor
+    spec:
+      containers:
+      - name: cadvisor
+        image: gcr.io/cadvisor/cadvisor:v0.43.0
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: rootfs
+          mountPath: /rootfs
+          readOnly: true
+        - name: var-run
+          mountPath: /var/run
+          readOnly: true
+        - name: sys
+          mountPath: /sys
+          readOnly: true
+        - name: docker-cgroup
+          mountPath: /var/lib/docker
+          readOnly: true
+        securityContext:
+          privileged: true
+      volumes:
+      - name: rootfs
+        hostPath:
+          path: /
+      - name: var-run
+        hostPath:
+          path: /var/run
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: docker-cgroup
+        hostPath:
+          path: /var/lib/docker
+      - name: kube-api-access
+        projected:
+          sources:
+          - serviceAccountToken:
+              expirationSeconds: 3607
+              path: token
+          - configMap:
+              name: kube-root-ca.crt
+              items:
+              - key: ca.crt
+                path: ca.crt
+          - downwardAPI:
+              items:
+              - path: namespace
+                fieldRef:
+                  fieldPath: metadata.namespace 

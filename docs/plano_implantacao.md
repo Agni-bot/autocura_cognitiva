@@ -2,17 +2,22 @@
 
 Este documento detalha o plano de implantação do Sistema de Autocura Cognitiva em um ambiente Kubernetes, incluindo operadores customizados para healing automático, sistema de rollback probabilístico e orquestração de ambientes paralelos.
 
-## Estrutura de Diretórios
+## Estrutura de Diretórios Atualizada
 
 ```
 kubernetes/
 ├── base/                      # Configurações base compartilhadas
 │   ├── namespace.yaml         # Namespace dedicado
 │   ├── serviceaccount.yaml    # Conta de serviço com permissões necessárias
-│   ├── rbac/                  # Configurações de RBAC
-│   │   ├── role.yaml          # Papel com permissões necessárias
-│   │   └── rolebinding.yaml   # Vinculação de papel à conta de serviço
 │   └── configmap.yaml         # Configurações compartilhadas
+├── monitoring/                # Configurações de monitoramento
+│   ├── prometheus-config.yaml      # ConfigMap do Prometheus
+│   ├── prometheus-deployment.yaml  # Deployment do Prometheus
+│   ├── prometheus-service.yaml     # Service do Prometheus
+│   ├── node-exporter-daemonset.yaml # DaemonSet do Node Exporter
+│   ├── node-exporter-service.yaml   # Service do Node Exporter
+│   ├── namespace.yaml              # Namespace de monitoramento
+│   └── kustomization.yaml          # Kustomization para monitoramento
 ├── operators/                 # Operadores customizados
 │   ├── healing-operator/      # Operador de healing automático
 │   │   ├── crds/              # Custom Resource Definitions
@@ -51,6 +56,164 @@ kubernetes/
 │   └── development/           # Ambiente de desenvolvimento
 │       └── kustomization.yaml # Customização para desenvolvimento
 └── kustomization.yaml         # Configuração principal do Kustomize
+```
+
+## Sistema de Monitoramento
+
+O sistema de monitoramento foi configurado usando Prometheus e Node Exporter. Inicialmente tentamos incluir o cAdvisor, mas devido a incompatibilidades com o ambiente Windows, optamos por removê-lo e focar nas métricas do Node Exporter e métricas personalizadas do aplicativo.
+
+### Componentes de Monitoramento
+
+#### Prometheus
+O Prometheus foi configurado para coletar métricas dos seguintes alvos:
+- O próprio Prometheus (`localhost:9090`)
+- Node Exporter (`node-exporter:9100`)
+- Aplicação Autocura Cognitiva (`autocura-cognitiva:8000`)
+
+#### Node Exporter
+O Node Exporter foi implantado como um DaemonSet para coletar métricas do sistema em cada nó do cluster.
+
+### Configurações do Prometheus
+
+O Prometheus foi configurado com os seguintes parâmetros:
+- Intervalo de coleta: 15s
+- Intervalo de avaliação: 15s
+- Armazenamento persistente usando `emptyDir`
+
+### Métricas Personalizadas
+
+O módulo de monitoramento foi atualizado para expor métricas no formato Prometheus. As principais métricas incluem:
+
+- `request_count`: Contador total de requisições
+- `request_latency_seconds`: Histograma de latência das requisições
+- Métricas de recursos do sistema
+- Métricas de performance da aplicação
+
+Para acessar o Prometheus:
+```bash
+kubectl port-forward -n monitoring svc/prometheus 9090:9090
+```
+
+Então acesse `http://localhost:9090` no navegador.
+
+### Configuração das Métricas no Código
+
+O módulo de monitoramento foi atualizado para usar a biblioteca `prometheus_client`. Exemplo de configuração:
+
+```python
+from prometheus_client import Counter, Histogram, start_http_server
+
+# Métricas
+request_count = Counter('request_count', 'Total de requisições')
+request_latency = Histogram('request_latency_seconds', 'Latência das requisições')
+
+# Use as métricas em seu código
+@app.get("/api/metricas")
+async def get_metricas():
+    request_count.inc()
+    with request_latency.time():
+        # seu código aqui
+        return [metric.__dict__ for metric in metricas_store]
+```
+
+### Arquivos de Configuração
+
+#### prometheus-config.yaml
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: 'node-exporter'
+        static_configs:
+          - targets: ['node-exporter:9100']
+
+      - job_name: 'autocura-cognitiva'
+        static_configs:
+          - targets: ['autocura-cognitiva:8000']
+        metrics_path: '/metrics'
+```
+
+#### prometheus-deployment.yaml
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.45.0
+        args:
+          - "--config.file=/etc/prometheus/prometheus.yml"
+          - "--storage.tsdb.path=/prometheus"
+          - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+          - "--web.console.templates=/usr/share/prometheus/consoles"
+        ports:
+        - containerPort: 9090
+        volumeMounts:
+        - name: prometheus-config-volume
+          mountPath: /etc/prometheus
+        - name: prometheus-storage-volume
+          mountPath: /prometheus
+      volumes:
+      - name: prometheus-config-volume
+        configMap:
+          name: prometheus-config
+      - name: prometheus-storage-volume
+        emptyDir: {}
+```
+
+#### node-exporter-daemonset.yaml
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: node-exporter
+  template:
+    metadata:
+      labels:
+        app: node-exporter
+    spec:
+      containers:
+      - name: node-exporter
+        image: prom/node-exporter:v1.6.1
+        ports:
+        - containerPort: 9100
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi
 ```
 
 ## Namespace e RBAC
@@ -1037,3 +1200,34 @@ Então, acesse http://localhost:5000 no navegador.
 - Configure RBAC adequadamente para limitar permissões.
 - Implemente monitoramento de segurança e escaneamento de vulnerabilidades.
 - Mantenha as imagens de contêiner atualizadas com as últimas correções de segurança.
+
+## Implantação do Sistema de Monitoramento
+
+Para implantar o sistema de monitoramento:
+
+1. Crie o namespace de monitoramento:
+   ```bash
+   kubectl apply -f k8s/monitoring/namespace.yaml
+   ```
+
+2. Aplique todas as configurações de monitoramento:
+   ```bash
+   kubectl apply -k k8s/monitoring/
+   ```
+
+3. Verifique o status dos pods:
+   ```bash
+   kubectl get pods -n monitoring
+   ```
+
+4. Acesse o Prometheus:
+   ```bash
+   kubectl port-forward -n monitoring svc/prometheus 9090:9090
+   ```
+
+## Considerações de Monitoramento
+
+- O cAdvisor foi removido devido a incompatibilidades com o ambiente Windows
+- As métricas de containers serão coletadas diretamente através do Node Exporter e métricas personalizadas
+- Considere adicionar Grafana para visualização das métricas em uma próxima iteração
+- Mantenha as configurações do Prometheus atualizadas conforme novos serviços são adicionados
