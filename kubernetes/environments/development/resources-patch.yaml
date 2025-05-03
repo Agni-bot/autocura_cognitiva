@@ -4,6 +4,10 @@ metadata:
   name: all
 spec:
   template:
+    metadata:
+      labels:
+        environment: development
+        app.kubernetes.io/environment: development
     spec:
       tolerations:
       - key: "node-role.kubernetes.io/master"

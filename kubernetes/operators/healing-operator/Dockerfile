@@ -7,9 +7,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copiar o código-fonte
-COPY main.go main.go
-COPY api/ api/
-COPY controller/ controller/
+COPY . .
 
 # Compilar
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o healing-operator main.go

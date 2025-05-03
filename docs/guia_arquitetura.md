@@ -1,256 +1,165 @@
-# Guia de Arquitetura
+# Guia de Arquitetura do Sistema de Autocura Cognitiva
 
 ## Visão Geral
 
-O Sistema de Autocura Cognitiva é construído seguindo uma arquitetura modular e distribuída, com foco em escalabilidade, resiliência e manutenibilidade.
+O Sistema de Autocura Cognitiva é uma solução distribuída que opera em um cluster Kubernetes local (Kind) com operadores customizados para gerenciamento autônomo de recursos. O sistema é composto por módulos especializados que trabalham em conjunto para monitorar, diagnosticar e corrigir problemas automaticamente.
 
-## Arquitetura do Sistema
+## Componentes do Sistema
 
-### Componentes Principais
+### 1. Módulo de Monitoramento
+- Coleta de métricas em tempo real
+- Análise de padrões de comportamento
+- Detecção de anomalias
+- Integração com Prometheus
 
-1. **API Gateway**
-   - Gerenciamento de requisições
-   - Autenticação e autorização
-   - Rate limiting
-   - Cache
+### 2. Módulo de Diagnóstico
+- Análise de padrões neurais
+- Identificação de causa raiz
+- Geração de insights
+- Integração com API Gemini
 
-2. **Serviços Core**
-   - Monitoramento
-   - Diagnóstico
-   - Ações
-   - Observabilidade
+### 3. Módulo Gerador de Ações
+- Planejamento de correções
+- Simulação de impacto
+- Priorização de ações
+- Execução automática
 
-3. **Armazenamento**
-   - PostgreSQL (dados estruturados)
-   - Redis (cache e filas)
-   - Elasticsearch (logs e métricas)
+### 4. Módulo de Observabilidade
+- Visualização 4D
+- Dashboards interativos
+- Análise de tendências
+- Relatórios customizados
 
-4. **Infraestrutura**
-   - Docker
-   - Kubernetes
-   - Prometheus
-   - Grafana
+## Operadores Customizados
 
-### Diagrama de Arquitetura
+### 1. Healing Operator
+- Monitoramento contínuo
+- Detecção de falhas
+- Execução de cura
+- Registro de ações
 
-```mermaid
-graph TD
-    A[Cliente] --> B[API Gateway]
-    B --> C[Serviço de Autenticação]
-    B --> D[Serviço de Monitoramento]
-    B --> E[Serviço de Diagnóstico]
-    B --> F[Serviço de Ações]
-    B --> G[Serviço de Observabilidade]
-    
-    D --> H[Prometheus]
-    E --> I[PostgreSQL]
-    F --> J[Redis]
-    G --> K[Elasticsearch]
-    
-    H --> L[Grafana]
-    I --> L
-    K --> L
-```
+### 2. Rollback Operator
+- Análise probabilística
+- Decisão de rollback
+- Execução de reversão
+- Histórico de versões
 
-## Padrões de Design
+## Infraestrutura
 
-### 1. Microserviços
+### 1. Cluster Kubernetes
+- Configuração Kind
+- Registry local
+- Armazenamento persistente
+- Gerenciamento de recursos
 
-- Cada serviço é independente
-- Comunicação via API REST/gRPC
-- Escala independente
-- Falhas isoladas
+### 2. Fluxo de Dados
+- Coleta de dados
+- Processamento
+- Execução de ações
+- Feedback
 
-### 2. Event-Driven
-
-- Eventos assíncronos
-- Pub/Sub com Redis
-- Processamento em background
-- Resiliência a falhas
-
-### 3. CQRS
-
-- Separação de leitura/escrita
-- Otimização de consultas
-- Cache inteligente
-- Escalabilidade horizontal
-
-## Tecnologias
-
-### Backend
-
-- **Framework**: FastAPI
-- **Linguagem**: Python 3.8+
-- **ORM**: SQLAlchemy
-- **Cache**: Redis
-- **Fila**: Celery
-
-### Frontend
-
-- **Framework**: React
-- **Estado**: Redux
-- **Estilo**: Tailwind CSS
-- **Gráficos**: D3.js
-
-### Infraestrutura
-
-- **Container**: Docker
-- **Orquestração**: Kubernetes
-- **Monitoramento**: Prometheus
-- **Visualização**: Grafana
-- **Logs**: ELK Stack
-
-## Segurança
-
-### Autenticação
-
-- JWT (JSON Web Tokens)
-- OAuth 2.0
-- MFA (Multi-Factor Authentication)
-- Rate Limiting
-
-### Autorização
-
-- RBAC (Role-Based Access Control)
-- ACL (Access Control Lists)
-- Políticas granulares
-- Auditoria de acesso
-
-### Criptografia
-
-- TLS 1.3
-- AES-256
-- Chaves assimétricas
-- Certificados digitais
-
-## Escalabilidade
-
-### Horizontal
-
-- Sharding de banco de dados
-- Balanceamento de carga
-- Cache distribuído
-- Filas de mensagens
-
-### Vertical
-
-- Otimização de consultas
-- Índices eficientes
-- Particionamento de dados
-- Compressão
-
-## Resiliência
-
-### Tolerância a Falhas
-
-- Circuit breakers
-- Retry policies
-- Fallbacks
-- Timeouts
-
-### Recuperação
-
-- Backup automático
-- Replicação de dados
-- Failover automático
-- Disaster recovery
+### 3. Segurança
+- Autenticação
+- Autorização
+- Criptografia
+- Auditoria
 
 ## Monitoramento
 
-### Métricas
+### 1. Métricas
+- Coleta
+- Armazenamento
+- Visualização
+- Alertas
 
-- Performance
-- Disponibilidade
-- Erros
-- Latência
-
-### Alertas
-
-- Thresholds dinâmicos
-- Agregação inteligente
-- Escalonamento
-- Silêncio programado
-
-## Logs
-
-### Estrutura
-
-```json
-{
-    "timestamp": "2024-05-02T12:00:00Z",
-    "level": "INFO",
-    "service": "monitoramento",
-    "trace_id": "abc123",
-    "message": "Métrica coletada",
-    "metadata": {
-        "metric": "cpu_usage",
-        "value": 75.5,
-        "host": "server-01"
-    }
-}
-```
-
-### Agregação
-
-- Centralização
-- Indexação
-- Retenção
+### 2. Logs
+- Coleta
+- Armazenamento
 - Análise
+- Retenção
 
-## Desenvolvimento
-
-### CI/CD
-
-- Git Flow
-- Testes automatizados
-- Deploy contínuo
-- Rollback automático
-
-### Qualidade
-
-- Linting
-- Formatação
-- Testes unitários
-- Testes de integração
+### 3. Alertas
+- Configuração
+- Notificação
+- Escalação
+- Resolução
 
 ## Manutenção
 
-### Documentação
+### 1. Atualizações
+- Imagens
+- Configurações
+- Operadores
+- Dependências
 
-- Swagger/OpenAPI
-- Diagramas
-- Guias
-- Exemplos
+### 2. Backup
+- Configurações
+- Dados
+- Estado
+- Recuperação
 
-### Suporte
+### 3. Escalabilidade
+- Horizontal
+- Vertical
+- Auto-scaling
+- Balanceamento
 
-- Monitoramento proativo
-- Logs detalhados
-- Métricas de saúde
-- Alertas inteligentes
+## Resiliência
 
-## Evolução
+### 1. Tolerância a Falhas
+- Replicação
+- Failover
+- Health checks
+- Circuit breakers
 
-### Roadmap
+### 2. Recuperação
+- Backup
+- Restauração
+- Rollback
+- Disaster recovery
 
-1. **Fase 1**: MVP
-   - Monitoramento básico
-   - Diagnóstico simples
-   - Ações manuais
+### 3. Disponibilidade
+- SLA
+- Uptime
+- Performance
+- Latência
 
-2. **Fase 2**: Automação
-   - Diagnóstico avançado
-   - Ações automáticas
-   - Machine Learning
+## Integração
 
-3. **Fase 3**: Inteligência
-   - Previsão de falhas
-   - Otimização automática
-   - Auto-healing
+### 1. APIs
+- REST
+- GraphQL
+- WebSocket
+- gRPC
 
-### Considerações
+### 2. Ferramentas
+- Prometheus
+- Grafana
+- Elasticsearch
+- Kibana
 
-- Compatibilidade retroativa
-- Migração de dados
-- Treinamento
-- Feedback contínuo 
+### 3. Sistemas Externos
+- Monitoramento
+- Logging
+- Alerting
+- Analytics
+
+## Ambiente de Desenvolvimento
+
+### 1. Ferramentas
+- Docker
+- Kind
+- kubectl
+- Helm
+
+### 2. Processos
+- CI/CD
+- Testes
+- Deploy
+- Monitoramento
+
+### 3. Documentação
+- Código
+- APIs
+- Configurações
+- Procedimentos 

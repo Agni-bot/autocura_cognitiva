@@ -40,18 +40,11 @@ REM Adicionar limpeza em caso de erro
 setlocal enabledelayedexpansion
 set "error=0"
 
-REM Verificar se o cluster já existe
+REM Verificar se o cluster já existe e excluí-lo
 kind get clusters | findstr "autocura-cognitiva" >nul
 if %ERRORLEVEL% EQU 0 (
-    echo Cluster 'autocura-cognitiva' já existe. Deseja excluí-lo e criar um novo? (s/n)
-    set /p resposta=
-    if /I "%resposta%"=="s" (
-        echo Excluindo cluster existente...
-        kind delete cluster --name autocura-cognitiva
-    ) else (
-        echo Mantendo cluster existente. Configuração concluída!
-        exit /b 0
-    )
+    echo Cluster 'autocura-cognitiva' já existe. Excluindo...
+    kind delete cluster --name autocura-cognitiva
 )
 
 REM Iniciar o registro local se ainda não estiver em execução

@@ -1,37 +1,74 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
+	"runtime"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
+var (
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
+)
+
+func init() {
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+}
+
 func main() {
-	// Verificar se o diretório controller existe
-	if _, err := os.Stat("controller"); os.IsNotExist(err) {
-		log.Println("Criando diretório controller...")
-		if err := os.MkdirAll("controller", 0755); err != nil {
-			log.Fatalf("Erro ao criar diretório controller: %v", err)
-		}
+	var metricsAddr string
+	var enableLeaderElection bool
+	var probeAddr string
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
+	opts := zap.Options{
+		Development: true,
+	}
+	opts.BindFlags(flag.CommandLine)
+	flag.Parse()
+
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		Port:                   9443,
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "rollback-operator.autocura-cognitiva.io",
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
 	}
 
-	// Verificar se o diretório api/v1 existe
-	if _, err := os.Stat("api/v1"); os.IsNotExist(err) {
-		log.Println("Criando diretório api/v1...")
-		if err := os.MkdirAll("api/v1", 0755); err != nil {
-			log.Fatalf("Erro ao criar diretório api/v1: %v", err)
-		}
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
 	}
 
-	// Inicializar módulo Go
-	log.Println("Inicializando módulo Go...")
-	if err := runCommand("go", "mod", "tidy"); err != nil {
-		log.Printf("Aviso: Erro ao executar go mod tidy: %v", err)
-		log.Println("Continuando mesmo assim...")
+	setupLog.Info("starting manager")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		setupLog.Error(err, "problem running manager")
+		os.Exit(1)
 	}
-
-	log.Println("Configuração concluída com sucesso!")
 }
 
 func runCommand(name string, args ...string) error {

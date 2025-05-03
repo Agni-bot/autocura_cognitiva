@@ -6,25 +6,17 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	rollbackv1 "github.com/autocura-cognitiva/rollback-operator/api/v1"
+	rollbackv1 "rollback-operator/api/v1"
 )
 
 // RollbackReconciler reconcilia um objeto RollbackPolicy
@@ -56,13 +48,68 @@ func (r *RollbackReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// Implementar a lógica de rollback aqui
-	// ...
+	// Listar todos os Deployments que correspondem ao seletor
+	var deployments appsv1.DeploymentList
+	selector, err := metav1.LabelSelectorAsSelector(&rollbackPolicy.Spec.Selector)
+	if err != nil {
+		log.Error(err, "Falha ao converter seletor")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.List(ctx, &deployments, client.MatchingLabelsSelector{Selector: selector}); err != nil {
+		log.Error(err, "Falha ao listar Deployments")
+		return ctrl.Result{}, err
+	}
+
+	// Atualizar o status com os recursos monitorados
+	rollbackPolicy.Status.MonitoredResources = make([]string, 0, len(deployments.Items))
+	rollbackPolicy.Status.CurrentRevisions = make(map[string]int32)
+	rollbackPolicy.Status.RollbackRevisions = make(map[string]int32)
+
+	for _, deployment := range deployments.Items {
+		resourceKey := fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name)
+		rollbackPolicy.Status.MonitoredResources = append(rollbackPolicy.Status.MonitoredResources, resourceKey)
+		rollbackPolicy.Status.CurrentRevisions[resourceKey] = deployment.Status.ObservedGeneration
+
+		// Verificar condições para rollback
+		needsRollback := false
+		for _, condition := range rollbackPolicy.Spec.Conditions {
+			switch condition.Type {
+			case "AvailableReplicas":
+				availableReplicas := deployment.Status.AvailableReplicas
+				if condition.Operator == "LessThan" && availableReplicas < 1 {
+					needsRollback = true
+				}
+			case "UnavailableReplicas":
+				unavailableReplicas := deployment.Status.UnavailableReplicas
+				if condition.Operator == "GreaterThan" && unavailableReplicas > 0 {
+					needsRollback = true
+				}
+			}
+		}
+
+		if needsRollback {
+			log.Info("Rollback necessário", "deployment", resourceKey)
+			r.Recorder.Event(&rollbackPolicy, "Normal", "RollbackTriggered", 
+				fmt.Sprintf("Rollback acionado para %s", resourceKey))
+
+			// Implementar a lógica de rollback
+			if rollbackPolicy.Spec.RollbackToRevision != "" {
+				// Atualizar a imagem do deployment para a versão especificada
+				deployment.Spec.Template.Spec.Containers[0].Image = rollbackPolicy.Spec.RollbackToRevision
+				if err := r.Update(ctx, &deployment); err != nil {
+					log.Error(err, "Falha ao atualizar deployment", "deployment", resourceKey)
+					return ctrl.Result{}, err
+				}
+				rollbackPolicy.Status.RollbackRevisions[resourceKey] = deployment.Status.ObservedGeneration
+			}
+		}
+	}
 
 	// Atualizar o status
 	rollbackPolicy.Status.LastAppliedTime = &metav1.Time{Time: time.Now()}
 	rollbackPolicy.Status.LastAppliedStatus = "Succeeded"
-	rollbackPolicy.Status.LastAppliedMessage = "Rollback aplicado com sucesso"
+	rollbackPolicy.Status.LastAppliedMessage = "Rollback verificado com sucesso"
 	rollbackPolicy.Status.AppliedCount++
 
 	if err := r.Status().Update(ctx, &rollbackPolicy); err != nil {
@@ -85,4 +132,4 @@ func (r *RollbackReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&rollbackv1.RollbackPolicy{}).
 		Watches(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
-}
+} 

@@ -1,247 +1,268 @@
-# Guia de Instalação e Configuração
+# Guia de Instalação do Sistema de Autocura Cognitiva
 
-## Requisitos do Sistema
+## Pré-requisitos
 
-### Hardware Mínimo
+### Requisitos Mínimos do Sistema
+- Windows 10 ou superior
+- Docker Desktop 20.10.0 ou superior
+- Kind 0.11.0 ou superior
+- kubectl 1.21.0 ou superior
+- 8GB de RAM
+- 20GB de espaço em disco
 
-- CPU: 4 núcleos
-- RAM: 16GB
-- Armazenamento: 100GB SSD
-- Rede: 1Gbps
+### Verificação de Pré-requisitos
+```powershell
+# Verificar versão do Docker
+docker --version
 
-### Software
+# Verificar versão do Kind
+kind version
 
-- Sistema Operacional:
-  - Ubuntu 20.04 LTS ou superior
-  - CentOS 8 ou superior
-  - Windows Server 2019 ou superior
+# Verificar versão do kubectl
+kubectl version --client
 
-- Dependências:
-  - Python 3.8+
-  - Docker 20.10+
-  - Docker Compose 2.0+
-  - PostgreSQL 13+
-  - Redis 6.0+
+# Verificar recursos do sistema
+systeminfo | findstr "Total Physical Memory"
+```
 
 ## Instalação
 
-### 1. Preparação do Ambiente
-
-```bash
-# Atualizar sistema
-sudo apt update && sudo apt upgrade -y
-
-# Instalar dependências
-sudo apt install -y python3-pip python3-venv git curl
-
-# Instalar Docker
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-
-# Instalar Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/download/v2.0.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-```
-
-### 2. Clonar o Repositório
-
-```bash
-git clone https://github.com/exemplo/autocura-cognitiva.git
+### 1. Configuração do Ambiente
+1. Clone o repositório:
+```powershell
+git clone https://github.com/seu-usuario/autocura-cognitiva.git
 cd autocura-cognitiva
 ```
 
-### 3. Configurar Ambiente Virtual
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+2. Configure as variáveis de ambiente:
+```powershell
+$env:NAMESPACE="autocura-cognitiva"
+$env:REGISTRY="localhost:5000"
+$env:TAG="latest"
 ```
 
-### 4. Configurar Variáveis de Ambiente
-
-Crie o arquivo `.env` na raiz do projeto:
-
-```env
-# Configurações do Sistema
-APP_ENV=production
-DEBUG=False
-SECRET_KEY=sua_chave_secreta
-
-# Banco de Dados
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=autocura
-DB_USER=usuario
-DB_PASSWORD=senha
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=senha_redis
-
-# API Keys
-OPENAI_API_KEY=sua_chave_openai
-PROMETHEUS_API_KEY=sua_chave_prometheus
+### 2. Inicialização do Cluster
+1. Execute o script de inicialização:
+```powershell
+.\scripts\00-start_all.cmd
 ```
 
-### 5. Inicializar Banco de Dados
-
-```bash
-# Criar banco de dados
-sudo -u postgres psql -c "CREATE DATABASE autocura;"
-sudo -u postgres psql -c "CREATE USER usuario WITH PASSWORD 'senha';"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE autocura TO usuario;"
-
-# Executar migrações
-python manage.py migrate
+2. Verifique o status do cluster:
+```powershell
+kubectl cluster-info
+kubectl get nodes
 ```
 
-### 6. Iniciar Serviços
-
-```bash
-# Iniciar containers Docker
-docker-compose up -d
-
-# Iniciar aplicação
-python manage.py runserver
+### 3. Configuração do Registry
+1. Inicie o registry local:
+```powershell
+docker run -d -p 5000:5000 --name registry registry:2
 ```
 
-## Configuração Pós-Instalação
-
-### 1. Configurar Monitoramento
-
-1. Acesse o painel administrativo
-2. Vá para "Configurações > Monitoramento"
-3. Configure:
-   - Endpoints do Prometheus
-   - Métricas a serem coletadas
-   - Intervalos de coleta
-
-### 2. Configurar Alertas
-
-1. Acesse "Configurações > Alertas"
-2. Configure:
-   - Regras de alerta
-   - Destinatários
-   - Canais de notificação
-   - Limiares
-
-### 3. Configurar Diagnóstico
-
-1. Vá para "Configurações > Diagnóstico"
-2. Configure:
-   - Regras de análise
-   - Profundidade padrão
-   - Componentes a monitorar
-
-### 4. Configurar Ações
-
-1. Acesse "Configurações > Ações"
-2. Configure:
-   - Ações disponíveis
-   - Permissões
-   - Agendamentos
-
-## Verificação da Instalação
-
-### Testes Básicos
-
-```bash
-# Verificar status dos containers
-docker-compose ps
-
-# Testar conexão com banco
-python manage.py check_db
-
-# Verificar logs
-docker-compose logs -f
+2. Verifique o status do registry:
+```powershell
+docker ps | findstr registry
 ```
 
-### Testes Avançados
-
-```bash
-# Executar testes unitários
-python manage.py test
-
-# Verificar cobertura
-coverage run manage.py test
-coverage report
+### 4. Construção e Push das Imagens
+1. Construa as imagens:
+```powershell
+docker build -t $env:REGISTRY/monitoramento:$env:TAG -f docker/monitoramento/Dockerfile .
+docker build -t $env:REGISTRY/diagnostico:$env:TAG -f docker/diagnostico/Dockerfile .
+docker build -t $env:REGISTRY/gerador-acoes:$env:TAG -f docker/gerador-acoes/Dockerfile .
+docker build -t $env:REGISTRY/observabilidade:$env:TAG -f docker/observabilidade/Dockerfile .
+docker build -t $env:REGISTRY/healing-operator:$env:TAG -f docker/healing-operator/Dockerfile .
+docker build -t $env:REGISTRY/rollback-operator:$env:TAG -f docker/rollback-operator/Dockerfile .
 ```
 
-## Manutenção
-
-### Backup
-
-Configure backup automático:
-
-```bash
-# Criar script de backup
-cat > backup.sh << 'EOF'
-#!/bin/bash
-BACKUP_DIR="/backup/$(date +%Y%m%d)"
-mkdir -p $BACKUP_DIR
-
-# Backup do banco
-pg_dump -U usuario autocura > $BACKUP_DIR/db.sql
-
-# Backup de configurações
-tar -czf $BACKUP_DIR/config.tar.gz /etc/autocura
-
-# Backup de logs
-tar -czf $BACKUP_DIR/logs.tar.gz /var/log/autocura
-EOF
-
-# Agendar backup diário
-(crontab -l 2>/dev/null; echo "0 2 * * * /path/to/backup.sh") | crontab -
+2. Faça push das imagens:
+```powershell
+docker push $env:REGISTRY/monitoramento:$env:TAG
+docker push $env:REGISTRY/diagnostico:$env:TAG
+docker push $env:REGISTRY/gerador-acoes:$env:TAG
+docker push $env:REGISTRY/observabilidade:$env:TAG
+docker push $env:REGISTRY/healing-operator:$env:TAG
+docker push $env:REGISTRY/rollback-operator:$env:TAG
 ```
 
-### Atualização
-
-```bash
-# Atualizar código
-git pull origin main
-
-# Atualizar dependências
-pip install -r requirements.txt
-
-# Executar migrações
-python manage.py migrate
-
-# Reiniciar serviços
-docker-compose down
-docker-compose up -d
+### 5. Aplicação dos Recursos Kubernetes
+1. Crie o namespace:
+```powershell
+kubectl apply -f k8s/00-namespace.yaml
 ```
+
+2. Aplique os CRDs:
+```powershell
+kubectl apply -f k8s/01-crds/
+```
+
+3. Aplique os operadores:
+```powershell
+kubectl apply -f k8s/02-operators/
+```
+
+4. Aplique os componentes:
+```powershell
+kubectl apply -f k8s/03-components/
+```
+
+5. Aplique o armazenamento:
+```powershell
+kubectl apply -f k8s/04-storage/
+```
+
+6. Aplique o ambiente de desenvolvimento:
+```powershell
+kubectl apply -f k8s/05-dev/
+```
+
+### 6. Verificação da Instalação
+1. Verifique o status dos pods:
+```powershell
+kubectl get pods -n $env:NAMESPACE
+```
+
+2. Verifique os serviços:
+```powershell
+kubectl get svc -n $env:NAMESPACE
+```
+
+3. Verifique os deployments:
+```powershell
+kubectl get deployments -n $env:NAMESPACE
+```
+
+## Pós-Instalação
+
+### 1. Configuração de Logs
+Os logs são armazenados em:
+- `logs/install.log`: Logs da instalação
+- `logs/operator.log`: Logs dos operadores
+- `logs/application.log`: Logs da aplicação
+
+### 2. Configuração de Monitoramento
+1. Acesse o dashboard do Grafana:
+```powershell
+kubectl port-forward svc/grafana -n $env:NAMESPACE 3000:3000
+```
+
+2. Acesse em: http://localhost:3000
+
+### 3. Configuração de Backup
+Os backups são executados automaticamente:
+- Diariamente às 2:00 AM
+- Armazenados em: `/backups/autocura`
+- Retenção: 7 dias
 
 ## Solução de Problemas
 
-### Logs
+### 1. Pods em Estado Pending
+```powershell
+# Verificar eventos
+kubectl describe pod <pod-name> -n $env:NAMESPACE
 
-Principais locais de logs:
-- `/var/log/autocura/app.log`
-- `/var/log/autocura/error.log`
-- `docker-compose logs -f`
+# Verificar logs
+kubectl logs <pod-name> -n $env:NAMESPACE
+```
 
-### Problemas Comuns
+### 2. Problemas com Registry
+```powershell
+# Verificar status do registry
+docker ps | findstr registry
 
-1. **Banco de Dados não Conecta**
-   - Verificar credenciais no `.env`
-   - Confirmar se PostgreSQL está rodando
-   - Checar permissões do usuário
+# Reiniciar registry
+docker restart registry
+```
 
-2. **Serviços Docker não Iniciam**
-   - Verificar memória disponível
-   - Checar conflitos de portas
-   - Verificar logs do Docker
+### 3. Problemas de RBAC
+```powershell
+# Verificar permissões
+kubectl auth can-i --list -n $env:NAMESPACE
 
-3. **Aplicação não Responde**
-   - Verificar logs da aplicação
-   - Confirmar se Redis está rodando
-   - Checar uso de CPU/memória
+# Verificar service account
+kubectl get serviceaccount -n $env:NAMESPACE
+```
+
+## Atualização do Sistema
+
+### 1. Atualização de Imagens
+```powershell
+# Reconstruir e push das imagens
+.\scripts\00-start_all.cmd --build-images
+
+# Atualizar deployments
+kubectl rollout restart deployment -n $env:NAMESPACE
+```
+
+### 2. Atualização de Configurações
+```powershell
+# Aplicar novas configurações
+kubectl apply -f k8s/
+
+# Verificar status
+kubectl get pods -n $env:NAMESPACE
+```
+
+## Segurança
+
+### 1. Configuração de Secrets
+```powershell
+# Criar secrets
+kubectl create secret generic autocura-secrets -n $env:NAMESPACE \
+  --from-literal=api-key=<api-key> \
+  --from-literal=db-password=<password>
+```
+
+### 2. Configuração de Network Policies
+```powershell
+# Aplicar políticas de rede
+kubectl apply -f k8s/security/network-policies.yaml
+```
+
+### 3. Configuração de RBAC
+```powershell
+# Aplicar configurações RBAC
+kubectl apply -f k8s/security/rbac.yaml
+```
+
+## Recursos de Segurança
+
+### Registry Local
+- O registry local é configurado com restart automático
+- Executa na porta 5000
+- Nome do container: `registry`
+
+### Namespace
+- Nome: `autocura-cognitiva`
+- Isolado de outros namespaces
+- Configurações de RBAC aplicadas
 
 ## Suporte
 
-Para suporte técnico:
-- Email: suporte@exemplo.com
-- Telefone: (11) 1234-5678
-- Documentação: https://docs.exemplo.com 
+### Logs
+- Logs do script: `logs/startup_*.log`
+- Logs dos pods: `kubectl logs`
+- Logs do cluster: `kubectl get events`
+
+### Diagnóstico
+Para diagnóstico detalhado:
+1. Execute o script de diagnóstico:
+```bash
+.\scripts\diagnostico.cmd
+```
+
+2. Verifique os logs gerados em:
+```
+logs/diagnostico_*.log
+```
+
+## Notas de Versão
+
+### Versão 2.0.0
+- Adicionado sistema de retry para operações críticas
+- Implementado logging detalhado
+- Melhor tratamento de erros
+- Verificação de versões dos componentes
+- Verificação automática do estado dos pods
+- Modularização do código
+- Melhor organização e documentação 

@@ -1,7 +1,7 @@
 package v1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // DeepCopyInto copia todos os campos de uma RollbackPolicy para outra
@@ -24,7 +24,7 @@ func (in *RollbackPolicy) DeepCopy() *RollbackPolicy {
 }
 
 // DeepCopyObject cria uma cópia do objeto
-func (in *RollbackPolicy) DeepCopyObject() Object {
+func (in *RollbackPolicy) DeepCopyObject() runtime.Object {
 	return in.DeepCopy()
 }
 
@@ -53,7 +53,7 @@ func (in *RollbackPolicyList) DeepCopy() *RollbackPolicyList {
 }
 
 // DeepCopyObject cria uma cópia do objeto
-func (in *RollbackPolicyList) DeepCopyObject() Object {
+func (in *RollbackPolicyList) DeepCopyObject() runtime.Object {
 	return in.DeepCopy()
 }
 
@@ -94,18 +94,4 @@ func (in *RollbackPolicyStatus) DeepCopyInto(out *RollbackPolicyStatus) {
 			(*out)[key] = val
 		}
 	}
-}
-
-// Object é uma interface para objetos que podem ser copiados
-type Object interface {
-	metav1.Object
-	runtime.Object
-}
-
-// runtime é um pacote fictício para satisfazer a interface Object
-type runtime struct{}
-
-// Object é uma interface para objetos runtime
-type Object interface {
-	DeepCopyObject() Object
 }

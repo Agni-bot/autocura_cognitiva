@@ -441,4 +441,319 @@ def validate_settings(settings: dict):
             validate_api_settings(value)
         elif key == 'jwt':
             validate_jwt_settings(value)
+```
+
+## Configurações Globais
+
+### Variáveis de Ambiente
+O sistema utiliza as seguintes variáveis de ambiente:
+
+```bash
+# Configurações do Sistema
+NAMESPACE=autocura-cognitiva
+REGISTRY=localhost:5000
+TAG=latest
+MAX_RETRIES=3
+TIMEOUT_SECONDS=300
+
+# Configurações do Kubernetes
+KUBECONFIG=~/.kube/config
+KIND_CLUSTER_NAME=autocura-cognitiva
+
+# Configurações de Logging
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+LOG_DIR=logs
+```
+
+### Configurações do Registry
+O registry local é configurado com:
+- Porta: 5000
+- Nome do container: `registry`
+- Restart policy: `always`
+- Versão: `registry:2`
+
+## Configurações do Kubernetes
+
+### Namespace
+O namespace `autocura-cognitiva` é configurado com:
+- RBAC granular
+- Network policies
+- Resource quotas
+- Pod security policies
+
+### RBAC
+As configurações de RBAC incluem:
+- ServiceAccount dedicado
+- ClusterRole com permissões necessárias
+- ClusterRoleBinding para o ServiceAccount
+- Políticas de acesso granular
+
+### Network Policies
+As políticas de rede incluem:
+- Isolamento de pods
+- Controle de tráfego
+- Regras de entrada/saída
+- Proteção de serviços
+
+## Configurações dos Operadores
+
+### Healing Operator
+```yaml
+apiVersion: autocura-cognitiva.io/v1
+kind: Healing
+metadata:
+  name: healing-config
+spec:
+  monitorInterval: 30s
+  maxRetries: 3
+  backoffSeconds: 5
+  actions:
+    - name: restart-pod
+      threshold: 80
+      cooldown: 300s
+    - name: scale-up
+      threshold: 90
+      cooldown: 600s
+```
+
+### Rollback Operator
+```yaml
+apiVersion: autocura-cognitiva.io/v1
+kind: Rollback
+metadata:
+  name: rollback-config
+spec:
+  monitorInterval: 60s
+  maxHistory: 5
+  probabilityThreshold: 0.8
+  metrics:
+    - name: error-rate
+      weight: 0.4
+    - name: latency
+      weight: 0.3
+    - name: resource-usage
+      weight: 0.3
+```
+
+## Configurações de Monitoramento
+
+### Prometheus
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: autocura-monitor
+spec:
+  selector:
+    matchLabels:
+      app: autocura-cognitiva
+  endpoints:
+    - port: metrics
+      interval: 15s
+```
+
+### Grafana
+```yaml
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDashboard
+metadata:
+  name: autocura-dashboard
+spec:
+  json: |
+    {
+      "title": "Autocura Cognitiva",
+      "panels": [
+        {
+          "title": "Métricas Principais",
+          "type": "graph",
+          "datasource": "Prometheus"
+        }
+      ]
+    }
+```
+
+## Configurações de Armazenamento
+
+### Persistent Volumes
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: autocura-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/autocura
+```
+
+### StatefulSets
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: autocura-sts
+spec:
+  serviceName: autocura
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: autocura
+          image: localhost:5000/autocura-cognitiva:latest
+```
+
+## Configurações de Segurança
+
+### Secrets
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: autocura-secrets
+type: Opaque
+data:
+  api-key: <base64-encoded>
+  db-password: <base64-encoded>
+```
+
+### ConfigMaps
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autocura-config
+data:
+  log-level: INFO
+  api-endpoint: https://api.autocura
+  monitoring-interval: "30"
+```
+
+## Configurações de Logging
+
+### Fluentd
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+data:
+  fluent.conf: |
+    <source>
+      @type tail
+      path /var/log/containers/*.log
+      pos_file /var/log/fluentd-containers.log.pos
+      tag kubernetes.*
+      read_from_head true
+      <parse>
+        @type json
+        time_key time
+        time_format %Y-%m-%dT%H:%M:%S.%NZ
+      </parse>
+    </source>
+```
+
+### Elasticsearch
+```yaml
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: autocura-es
+spec:
+  version: 7.10.0
+  nodeSets:
+    - name: default
+      count: 3
+      config:
+        node.master: true
+        node.data: true
+        node.ingest: true
+```
+
+## Configurações de Backup
+
+### CronJob para Backup
+```yaml
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: autocura-backup
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: backup
+              image: localhost:5000/backup-tool:latest
+              command: ["/bin/sh", "-c", "backup.sh"]
+```
+
+## Configurações de Atualização
+
+### Deployment Strategy
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autocura-deployment
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+```
+
+## Configurações de Diagnóstico
+
+### Health Checks
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: autocura-pod
+spec:
+  containers:
+    - name: autocura
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 30
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /ready
+          port: 8080
+        initialDelaySeconds: 5
+        periodSeconds: 5
+```
+
+## Configurações de Escalabilidade
+
+### Horizontal Pod Autoscaler
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: autocura-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: autocura-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
 ``` 

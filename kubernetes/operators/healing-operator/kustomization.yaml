@@ -1,13 +1,22 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+namespace: autocura-cognitiva
+
 resources:
 - deployment.yaml
+- service.yaml
+- serviceaccount.yaml
+- role.yaml
+- rolebinding.yaml
 - config/crd/bases/healing.autocura-cognitiva.io_healingpolicies.yaml
 - config/crd/bases/healing.autocura-cognitiva.io_healings.yaml
 - pdb.yaml
 
-commonLabels:
-  app.kubernetes.io/component: healing-operator
-  app.kubernetes.io/part-of: autocura-cognitiva
-  app.kubernetes.io/managed-by: kustomize
+labels:
+- pairs:
+    app.kubernetes.io/name: healing-operator
+    app.kubernetes.io/part-of: autocura-cognitiva
+
+commonAnnotations:
+  description: "Configurações do Healing Operator do Sistema de Autocura Cognitiva"

@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	rollbackv1 "github.com/autocura-cognitiva/rollback-operator/api/v1"
-	"github.com/autocura-cognitiva/rollback-operator/controllers"
+	rollbackv1 "rollback-operator/api/v1"
+	"rollback-operator/controller/controllers"
 	//+kubebuilder:scaffold:imports
 )
 

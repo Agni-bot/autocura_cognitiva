@@ -1,171 +1,308 @@
-# Guia de Monitoramento
+# Guia de Monitoramento do Sistema de Autocura Cognitiva
 
-## Visão Geral
-
-Este guia descreve as práticas e ferramentas de monitoramento do Sistema de Autocura Cognitiva.
-
-## Métricas Principais
-
-### 1. Infraestrutura
-
-#### CPU
-- Uso percentual
-- Load average
-- Tempo de espera
-- Interrupções
-
-#### Memória
-- Uso total
-- Swap
-- Cache
-- Buffer
-
-#### Disco
-- Espaço livre
-- IOPS
-- Latência
-- Throughput
-
-#### Rede
-- Largura de banda
-- Pacotes
-- Erros
-- Latência
-
-### 2. Aplicação
-
-#### Performance
-- Tempo de resposta
-- Taxa de requisições
-- Erros por segundo
-- Tempo de CPU
-
-#### Disponibilidade
-- Uptime
-- Health checks
-- SLA
-- MTTR
-
-#### Negócio
-- Usuários ativos
-- Transações
-- Conversões
-- Receita
-
-## Ferramentas
+## Configurações de Monitoramento
 
 ### 1. Prometheus
-
-#### Configuração
 ```yaml
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-
-scrape_configs:
-  - job_name: 'autocura'
-    static_configs:
-      - targets: ['localhost:9090']
-```
-
-#### Métricas Personalizadas
-```python
-from prometheus_client import Counter, Gauge
-
-requests_total = Counter('http_requests_total', 'Total HTTP requests')
-cpu_usage = Gauge('cpu_usage_percent', 'CPU usage in percent')
+# prometheus.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 2
+  resources:
+    requests:
+      memory: 400Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+  serviceAccountName: prometheus
+  serviceMonitorSelector: {}
 ```
 
 ### 2. Grafana
-
-#### Dashboards
-- Visão geral do sistema
-- Performance da aplicação
-- Infraestrutura
-- Negócio
-
-#### Alertas
-```json
-{
-  "name": "High CPU Usage",
-  "condition": "B",
-  "data": [
-    {
-      "refId": "A",
-      "query": "rate(cpu_usage_percent[5m])",
-      "type": "timeseries"
-    },
-    {
-      "refId": "B",
-      "query": "$A > 80",
-      "type": "threshold"
-    }
-  ]
-}
+```yaml
+# grafana.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: Grafana
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 2
+  resources:
+    requests:
+      memory: 200Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 472
+  serviceAccountName: grafana
 ```
 
-### 3. ELK Stack
-
-#### Logs
-```json
-{
-  "timestamp": "2024-05-02T12:00:00Z",
-  "level": "INFO",
-  "service": "monitoramento",
-  "message": "Métrica coletada",
-  "metadata": {
-    "metric": "cpu_usage",
-    "value": 75.5
-  }
-}
+### 3. Alertmanager
+```yaml
+# alertmanager.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: Alertmanager
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  replicas: 2
+  resources:
+    requests:
+      memory: 200Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+  serviceAccountName: alertmanager
 ```
 
-#### Visualizações
-- Gráficos de tendência
-- Agregações
-- Correlações
-- Anomalias
+## Métricas
+
+### 1. Métricas do Sistema
+```powershell
+# Verificar métricas
+kubectl port-forward svc/prometheus 9090:9090
+curl -G 'http://localhost:9090/api/v1/query' --data-urlencode 'query=system_metrics'
+
+# Exportar métricas
+curl -G 'http://localhost:9090/api/v1/query_range' --data-urlencode 'query=system_metrics' --data-urlencode 'start=1h' --data-urlencode 'end=now' --data-urlencode 'step=1m' > metrics.json
+```
+
+### 2. Métricas da Aplicação
+```powershell
+# Verificar métricas
+kubectl port-forward svc/prometheus 9090:9090
+curl -G 'http://localhost:9090/api/v1/query' --data-urlencode 'query=application_metrics'
+
+# Exportar métricas
+curl -G 'http://localhost:9090/api/v1/query_range' --data-urlencode 'query=application_metrics' --data-urlencode 'start=1h' --data-urlencode 'end=now' --data-urlencode 'step=1m' > metrics.json
+```
+
+### 3. Métricas de Negócio
+```powershell
+# Verificar métricas
+kubectl port-forward svc/prometheus 9090:9090
+curl -G 'http://localhost:9090/api/v1/query' --data-urlencode 'query=business_metrics'
+
+# Exportar métricas
+curl -G 'http://localhost:9090/api/v1/query_range' --data-urlencode 'query=business_metrics' --data-urlencode 'start=1h' --data-urlencode 'end=now' --data-urlencode 'step=1m' > metrics.json
+```
+
+## Logs
+
+### 1. Fluentd
+```yaml
+# fluentd.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd
+  namespace: logging
+spec:
+  selector:
+    matchLabels:
+      app: fluentd
+  template:
+    metadata:
+      labels:
+        app: fluentd
+    spec:
+      containers:
+        - name: fluentd
+          image: fluent/fluentd:latest
+          resources:
+            requests:
+              memory: 200Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+```
+
+### 2. Elasticsearch
+```yaml
+# elasticsearch.yaml
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: elasticsearch
+  namespace: logging
+spec:
+  version: 7.17.0
+  nodeSets:
+    - name: default
+      count: 3
+      config:
+        node.master: true
+        node.data: true
+        node.ingest: true
+      resources:
+        requests:
+          memory: 4Gi
+```
+
+### 3. Kibana
+```yaml
+# kibana.yaml
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: kibana
+  namespace: logging
+spec:
+  version: 7.17.0
+  count: 1
+  elasticsearchRef:
+    name: elasticsearch
+  resources:
+    requests:
+      memory: 1Gi
+```
 
 ## Alertas
 
-### 1. Configuração
-
-#### Níveis
-- **Crítico**: Requer ação imediata
-- **Alto**: Requer atenção urgente
-- **Médio**: Monitorar e planejar ação
-- **Baixo**: Informativo
-
-#### Canais
-- Email
-- SMS
-- Slack
-- PagerDuty
-
-### 2. Exemplos
-
-#### CPU Alta
+### 1. Configuração de Alertas
 ```yaml
-alert: HighCPUUsage
-expr: rate(cpu_usage_percent[5m]) > 80
-for: 5m
-labels:
-  severity: critical
-annotations:
-  summary: "CPU usage is high"
-  description: "CPU usage is above 80% for 5 minutes"
+# alert-rules.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alert-rules
+  namespace: monitoring
+spec:
+  groups:
+    - name: system
+      rules:
+        - alert: HighCPUUsage
+          expr: node_cpu_seconds_total{mode="idle"} < 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: High CPU usage
 ```
 
-#### Erros de Aplicação
+### 2. Notificações
 ```yaml
-alert: HighErrorRate
-expr: rate(http_errors_total[5m]) > 10
-for: 2m
-labels:
-  severity: high
-annotations:
-  summary: "High error rate"
-  description: "Error rate is above 10 per second"
+# alertmanager-config.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: AlertmanagerConfig
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+spec:
+  receivers:
+    - name: email
+      emailConfigs:
+        - to: admin@example.com
+          from: alertmanager@example.com
+          smarthost: smtp.example.com:587
+          authUsername: alertmanager
+          authPassword:
+            name: alertmanager-smtp
+            key: password
+```
+
+### 3. Silenciamento
+```powershell
+# Criar silenciamento
+kubectl port-forward svc/alertmanager 9093:9093
+curl -X POST http://localhost:9093/api/v1/silences -d '{"matchers":[{"name":"alertname","value":"HighCPUUsage"}],"startsAt":"2024-01-01T00:00:00Z","endsAt":"2024-01-02T00:00:00Z"}'
+
+# Listar silenciamentos
+curl http://localhost:9093/api/v1/silences
+```
+
+## Dashboards
+
+### 1. Grafana
+```yaml
+# system-dashboard.yaml
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDashboard
+metadata:
+  name: system-dashboard
+  namespace: monitoring
+spec:
+  json: |
+    {
+      "dashboard": {
+        "title": "System Dashboard",
+        "panels": [
+          {
+            "title": "CPU Usage",
+            "type": "graph",
+            "datasource": "Prometheus",
+            "targets": [
+              {
+                "expr": "node_cpu_seconds_total"
+              }
+            ]
+          }
+        ]
+      }
+    }
+```
+
+### 2. Data Sources
+```yaml
+# prometheus-datasource.yaml
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDataSource
+metadata:
+  name: prometheus-datasource
+  namespace: monitoring
+spec:
+  name: Prometheus
+  type: prometheus
+  url: http://prometheus:9090
+  access: proxy
+  isDefault: true
+```
+
+### 3. Visualização
+```powershell
+# Acessar Grafana
+kubectl port-forward svc/grafana 3000:3000
+
+# Acessar Kibana
+kubectl port-forward svc/kibana 5601:5601
+
+# Acessar Prometheus
+kubectl port-forward svc/prometheus 9090:9090
+```
+
+## Exportação de Dados
+
+### 1. Exportação de Métricas
+```powershell
+# Exportar métricas
+kubectl port-forward svc/prometheus 9090:9090
+curl -G 'http://localhost:9090/api/v1/query_range' --data-urlencode 'query=system_metrics' --data-urlencode 'start=1h' --data-urlencode 'end=now' --data-urlencode 'step=1m' > metrics.json
+
+# Exportar logs
+kubectl logs -n $env:NAMESPACE -l app=healing-operator > logs.txt
+```
+
+### 2. Exportação de Logs
+```powershell
+# Exportar logs
+kubectl logs -n $env:NAMESPACE -l app=rollback-operator > logs.txt
+
+# Exportar eventos
+kubectl get events --sort-by='.lastTimestamp' > events.txt
+```
+
+### 3. Exportação de Dashboards
+```powershell
+# Exportar dashboards
+kubectl get configmaps -n monitoring -l app=grafana-dashboard -o yaml > dashboards.yaml
+
+# Exportar configurações
+kubectl get configmaps -n monitoring -l app=grafana-datasource -o yaml > datasources.yaml
 ```
 
 ## Análise de Tendências

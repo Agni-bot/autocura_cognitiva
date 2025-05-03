@@ -1,0 +1,35 @@
+apiVersion: autocura.cognitiva.io/v1
+kind: RollbackPolicy
+metadata:
+  name: example-rollback-policy
+  namespace: autocura-cognitiva
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: example-app
+    namespace: autocura-cognitiva
+  metrics:
+    - name: cpu-utilization
+      type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+    - name: memory-utilization
+      type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 85
+  conditions:
+    - type: AvailableReplicas
+      operator: LessThan
+      value: "1"
+    - type: UnavailableReplicas
+      operator: GreaterThan
+      value: "0"
+  checkInterval: 60
+  rollbackToRevision: "example-app:stable" 

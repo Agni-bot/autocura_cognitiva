@@ -12,9 +12,11 @@ resources:
 
 namespace: autocura-cognitiva
 
-commonLabels:
-  environment: development
-  app.kubernetes.io/environment: development
+labels:
+- pairs:
+    environment: development
+    app.kubernetes.io/environment: development
+  includeSelectors: false
 
 patches:
 - path: resources-patch.yaml

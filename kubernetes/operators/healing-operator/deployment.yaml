@@ -20,7 +20,7 @@ spec:
         runAsGroup: 1000
       containers:
       - name: healing-operator
-        image: autocura-cognitiva/healing-operator:latest
+        image: localhost:5000/autocura-cognitiva/healing-operator:latest
         imagePullPolicy: Always
         resources:
           limits:

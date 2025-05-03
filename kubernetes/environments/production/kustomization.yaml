@@ -1,24 +1,29 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+namespace: autocura-cognitiva
+
 resources:
 - ../../base
+- ../../components/observabilidade
 - ../../components/monitoramento
 - ../../components/diagnostico
 - ../../components/gerador-acoes
-- ../../components/observabilidade
 
-namespace: autocura-cognitiva-prod
+patchesStrategicMerge:
+- deployment-patch.yaml
+- service-patch.yaml
+- ingress-patch.yaml
 
-commonLabels:
-  environment: production
-  app.kubernetes.io/environment: production
+labels:
+- pairs:
+    app.kubernetes.io/name: autocura-cognitiva
+    app.kubernetes.io/part-of: autocura-cognitiva
+    app.kubernetes.io/environment: production
 
-patches:
-- path: resources-patch.yaml
-  target:
-    kind: Deployment
-    
+commonAnnotations:
+  description: "Configurações do ambiente de produção do Sistema de Autocura Cognitiva"
+
 configMapGenerator:
 - name: environment-config
   literals:

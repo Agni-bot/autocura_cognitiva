@@ -20,8 +20,8 @@ spec:
         runAsGroup: 1000
       containers:
       - name: rollback-operator
-        image: autocura-cognitiva/rollback-operator:latest
-        imagePullPolicy: Always
+        image: localhost:5000/autocura-cognitiva/rollback-operator:latest
+        imagePullPolicy: IfNotPresent
         resources:
           limits:
             cpu: 500m

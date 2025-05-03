@@ -1,0 +1,109 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: rollbackpolicies.autocura.cognitiva.io
+spec:
+  group: autocura.cognitiva.io
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                targetRef:
+                  type: object
+                  properties:
+                    apiVersion:
+                      type: string
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                metrics:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      type:
+                        type: string
+                        enum: [Resource, Custom]
+                      resource:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          target:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                                enum: [Utilization, Value]
+                              averageUtilization:
+                                type: integer
+                              averageValue:
+                                type: string
+                      custom:
+                        type: object
+                        properties:
+                          metricName:
+                            type: string
+                          threshold:
+                            type: number
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [AvailableReplicas, UnavailableReplicas]
+                      operator:
+                        type: string
+                        enum: [LessThan, GreaterThan]
+                      value:
+                        type: string
+                checkInterval:
+                  type: integer
+                  minimum: 30
+                rollbackToRevision:
+                  type: string
+            status:
+              type: object
+              properties:
+                lastAppliedTime:
+                  type: string
+                  format: date-time
+                lastAppliedStatus:
+                  type: string
+                lastAppliedMessage:
+                  type: string
+                appliedCount:
+                  type: integer
+                monitoredResources:
+                  type: array
+                  items:
+                    type: string
+                currentRevisions:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                rollbackRevisions:
+                  type: object
+                  additionalProperties:
+                    type: integer
+  scope: Namespaced
+  names:
+    plural: rollbackpolicies
+    singular: rollbackpolicy
+    kind: RollbackPolicy
+    shortNames:
+    - rp 
