@@ -5,14 +5,16 @@ namespace: autocura-cognitiva
 
 resources:
 - prometheus.yaml
-- serviceaccount.yaml
+- service.yaml
+- configmap.yaml
 - role.yaml
 - rolebinding.yaml
+- serviceaccount.yaml
+- ingress.yaml
 
-labels:
-- pairs:
-    app.kubernetes.io/name: prometheus
-    app.kubernetes.io/part-of: autocura-cognitiva
+commonLabels:
+  app.kubernetes.io/name: prometheus
+  app.kubernetes.io/part-of: monitoramento
 
 commonAnnotations:
   description: "Configurações do Prometheus para o Sistema de Autocura Cognitiva" 

@@ -1,0 +1,16 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: healing-operator-rolebinding
+  namespace: autocura-cognitiva
+  labels:
+    app.kubernetes.io/name: healing-operator
+    app.kubernetes.io/part-of: operators
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: healing-operator-role
+subjects:
+- kind: ServiceAccount
+  name: healing-operator
+  namespace: autocura-cognitiva 

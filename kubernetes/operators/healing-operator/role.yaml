@@ -1,0 +1,18 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: healing-operator-role
+  namespace: autocura-cognitiva
+  labels:
+    app.kubernetes.io/name: healing-operator
+    app.kubernetes.io/part-of: operators
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "persistentvolumeclaims", "events", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["healing.autocura-cognitiva.io"]
+  resources: ["healings"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"] 

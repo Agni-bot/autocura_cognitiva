@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: templates-pvc
+  namespace: autocura-cognitiva
+  labels:
+    app.kubernetes.io/name: templates
+    app.kubernetes.io/part-of: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 5Gi 

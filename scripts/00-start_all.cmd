@@ -5,13 +5,19 @@ REM Última atualização: %date% %time%
 
 REM Configurações globais
 setlocal enabledelayedexpansion
-set "LOG_FILE=..\logs\startup_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.log"
+set "BASE_DIR=%CD%"
+set "LOG_DIR=%BASE_DIR%\logs"
+set "LOG_FILE=%LOG_DIR%\startup_%date:~-4,4%%date:~-7,2%%date:~-10,2%_%time:~0,2%%time:~3,2%.log"
 set "MAX_RETRIES=3"
 set "TIMEOUT_SECONDS=300"
 set "REGISTRY=localhost:5000"
 set "TAG=latest"
-set "BASE_DIR=%CD%"
 set "NAMESPACE=autocura-cognitiva"
+
+REM Criar diretório de logs se não existir
+if not exist "%LOG_DIR%" (
+    mkdir "%LOG_DIR%"
+)
 
 REM Funções utilitárias
 call :log_info "Iniciando script de inicialização do Sistema de Autocura Cognitiva"
@@ -42,6 +48,13 @@ REM 4. Aplicar recursos Kubernetes
 call :apply_kubernetes_resources
 if %ERRORLEVEL% NEQ 0 (
     call :log_error "Falha na aplicação dos recursos Kubernetes"
+    exit /b 1
+)
+
+REM 4.1 Verificar RBAC
+call :verify_rbac
+if %ERRORLEVEL% NEQ 0 (
+    call :log_error "Falha na verificação do RBAC"
     exit /b 1
 )
 
@@ -136,14 +149,21 @@ exit /b 1
         call :log_info "Registry local já está rodando"
     )
 
+    REM Verificar se o arquivo setup-kind.cmd existe
+    if not exist "%BASE_DIR%\kind-config\setup-kind.cmd" (
+        call :log_error "Arquivo setup-kind.cmd não encontrado em %BASE_DIR%\kind-config"
+        exit /b 1
+    )
+
     REM Configurar cluster Kind
     cd "%BASE_DIR%\kind-config"
     call setup-kind.cmd
     if %ERRORLEVEL% NEQ 0 (
         call :log_error "Falha ao configurar cluster Kind"
+        cd "%BASE_DIR%"
         exit /b 1
     )
-    cd "%BASE_DIR%\scripts"
+    cd "%BASE_DIR%"
 
     REM Criar namespace
     kubectl apply -f "%BASE_DIR%\kubernetes\base\namespace.yaml"
@@ -162,11 +182,22 @@ exit /b 1
 
     for %%s in (%SERVICES%) do (
         call :log_info "Buildando imagem do %%s..."
+        
+        REM Verificar se o diretório do serviço existe
+        if not exist "%BASE_DIR%\src\%%s" (
+            call :log_error "Diretório do serviço %%s não encontrado em %BASE_DIR%\src"
+            exit /b 1
+        )
+        
         cd "%BASE_DIR%\src\%%s"
         
         set "RETRY_COUNT=0"
         :build_retry
-        docker build -t %REGISTRY%/autocura-cognitiva/%%s:%TAG% -f Dockerfile .
+        if exist "Dockerfile.%%s" (
+            docker build -t %REGISTRY%/autocura-cognitiva/%%s:%TAG% -f Dockerfile.%%s .
+        ) else (
+            docker build -t %REGISTRY%/autocura-cognitiva/%%s:%TAG% -f Dockerfile .
+        )
         if %ERRORLEVEL% NEQ 0 (
             set /a "RETRY_COUNT+=1"
             if !RETRY_COUNT! LSS %MAX_RETRIES% (
@@ -175,6 +206,7 @@ exit /b 1
                 goto build_retry
             )
             call :log_error "Falha ao buildar imagem do %%s"
+            cd "%BASE_DIR%"
             exit /b 1
         )
 
@@ -189,11 +221,12 @@ exit /b 1
                 goto push_retry
             )
             call :log_error "Falha ao enviar imagem do %%s"
+            cd "%BASE_DIR%"
             exit /b 1
         )
     )
 
-    cd "%BASE_DIR%\scripts"
+    cd "%BASE_DIR%"
     exit /b 0
 
 :apply_kubernetes_resources
@@ -204,36 +237,36 @@ exit /b 1
     kubectl delete deployment --all -n %NAMESPACE%
 
     REM Aplicar recursos na ordem correta
-    cd "%BASE_DIR%\kubernetes"
+    cd "%BASE_DIR%"
 
     REM Aplicar CRDs
-    if exist operators (
+    if exist kubernetes\operators (
         call :log_info "Aplicando CRDs..."
-        kubectl apply -f operators/healing-operator/config/crd/bases/healing.autocura-cognitiva.io_healings.yaml
-        kubectl apply -f operators/rollback-operator/config/crd/bases/rollback.autocura-cognitiva.io_rollbacks.yaml
+        kubectl apply -f kubernetes\operators\healing-operator\config\crd\bases\healing.autocura-cognitiva.io_healings.yaml
+        kubectl apply -f kubernetes\operators\rollback-operator\config\crd\bases\rollback.autocura-cognitiva.io_rollbacks.yaml
     )
 
     REM Aplicar recursos base
     call :log_info "Aplicando recursos base..."
-    kubectl apply -k base
+    kubectl apply -k kubernetes\base
 
     REM Aplicar recursos de monitoramento
     call :log_info "Aplicando recursos de monitoramento..."
-    kubectl apply -k monitoring
+    kubectl apply -k kubernetes\monitoring
 
     REM Aplicar recursos de armazenamento
     call :log_info "Aplicando recursos de armazenamento..."
-    kubectl apply -k storage
+    kubectl apply -k kubernetes\storage
 
     REM Aplicar recursos de componentes
     call :log_info "Aplicando recursos de componentes..."
-    kubectl apply -k components
+    kubectl apply -k kubernetes\components
 
     REM Aplicar recursos de operadores
     call :log_info "Aplicando recursos de operadores..."
-    kubectl apply -k operators
+    kubectl apply -k kubernetes\operators
 
-    cd "%BASE_DIR%\scripts"
+    cd "%BASE_DIR%"
     exit /b 0
 
 :check_final_status
@@ -263,4 +296,31 @@ exit /b 1
     )
 
     call :log_info "Todos os pods estão rodando!"
+    exit /b 0
+
+:verify_rbac
+    call :log_info "Verificando configurações RBAC..."
+    
+    REM Verificar ServiceAccounts
+    kubectl get serviceaccount -n %NAMESPACE% | findstr "diagnostico gerador-acoes observabilidade monitoramento" >nul
+    if %ERRORLEVEL% NEQ 0 (
+        call :log_error "Falha na verificação dos ServiceAccounts"
+        exit /b 1
+    )
+    
+    REM Verificar Roles
+    kubectl get role -n %NAMESPACE% | findstr "diagnostico gerador-acoes observabilidade monitoramento" >nul
+    if %ERRORLEVEL% NEQ 0 (
+        call :log_error "Falha na verificação das Roles"
+        exit /b 1
+    )
+    
+    REM Verificar RoleBindings
+    kubectl get rolebinding -n %NAMESPACE% | findstr "diagnostico gerador-acoes observabilidade monitoramento" >nul
+    if %ERRORLEVEL% NEQ 0 (
+        call :log_error "Falha na verificação dos RoleBindings"
+        exit /b 1
+    )
+    
+    call :log_info "Verificação RBAC concluída com sucesso"
     exit /b 0 
