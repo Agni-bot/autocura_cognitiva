@@ -1,0 +1,37 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: autocura-cognitiva
+  namespace: autocura-cognitiva
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - autocura-cognitiva-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /api/v1
+    route:
+    - destination:
+        host: autocura-cognitiva-service
+        port:
+          number: 8080
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+      retryOn: connect-failure,refused-stream,unavailable,cancelled,retriable-status-codes
+    timeout: 10s
+    corsPolicy:
+      allowOrigin:
+      - "*"
+      allowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+      allowHeaders:
+      - authorization
+      - content-type
+      maxAge: "24h" 

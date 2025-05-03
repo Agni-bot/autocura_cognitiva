@@ -1,1 +1,68 @@
-kubernetes/base/secrets.yaml 
+# Arquivos de configuração sensíveis
+kubernetes/base/secrets.yaml
+kubernetes/base/istio/secrets.yaml
+kubernetes/monitoring/grafana-secrets.yaml
+kubernetes/monitoring/prometheus-secrets.yaml
+
+# Arquivos de ambiente e credenciais
+.env
+.env.*
+*.env
+config/*.env
+config/credentials/*
+config/secrets/*
+
+# Arquivos de certificados e chaves
+*.pem
+*.key
+*.crt
+*.cert
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.truststore
+
+# Arquivos de logs e dados temporários
+logs/*
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Diretórios de dados persistentes
+data/
+volumes/
+storage/
+
+# Arquivos de IDE e editor
+.idea/
+.vscode/
+*.code-workspace
+*.sublime-workspace
+*.sublime-project
+
+# Arquivos de cache e dependências
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Arquivos de backup
+*.bak
+*.backup
+*.old
+*~
+
+# Arquivos específicos do sistema
+kind-config/kind-config.yaml
+k8s/secrets/
+k8s/credentials/ 
