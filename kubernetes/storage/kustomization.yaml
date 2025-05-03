@@ -16,4 +16,4 @@ labels:
     app.kubernetes.io/part-of: autocura-cognitiva
 
 commonAnnotations:
-  description: "Configurações de armazenamento do Sistema de Autocura Cognitiva"
+  description: "Configurações de armazenamento para o Sistema de Autocura Cognitiva"

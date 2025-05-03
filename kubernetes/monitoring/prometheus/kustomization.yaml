@@ -4,15 +4,15 @@ kind: Kustomization
 namespace: autocura-cognitiva
 
 resources:
-- monitoramento/
-- diagnostico/
-- gerador-acoes/
-- observabilidade/
+- prometheus.yaml
+- serviceaccount.yaml
+- role.yaml
+- rolebinding.yaml
 
 labels:
 - pairs:
-    app.kubernetes.io/name: components
+    app.kubernetes.io/name: prometheus
     app.kubernetes.io/part-of: autocura-cognitiva
 
 commonAnnotations:
-  description: "Configurações dos componentes para o Sistema de Autocura Cognitiva" 
+  description: "Configurações do Prometheus para o Sistema de Autocura Cognitiva" 

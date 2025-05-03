@@ -4,9 +4,9 @@ kind: Kustomization
 namespace: autocura-cognitiva
 
 resources:
-- prometheus
-- grafana
-- alertmanager
+- prometheus/
+- grafana/
+- alertmanager/
 
 labels:
 - pairs:
@@ -14,4 +14,4 @@ labels:
     app.kubernetes.io/part-of: autocura-cognitiva
 
 commonAnnotations:
-  description: "Configurações de monitoramento do Sistema de Autocura Cognitiva" 
+  description: "Configurações de monitoramento para o Sistema de Autocura Cognitiva" 
