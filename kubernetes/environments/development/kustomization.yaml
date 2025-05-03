@@ -34,19 +34,19 @@ configMapGenerator:
 images:
 - name: autocura-cognitiva/monitoramento
   newName: localhost:5000/autocura-cognitiva/monitoramento
-  newTag: dev
+  newTag: latest
 - name: autocura-cognitiva/diagnostico
   newName: localhost:5000/autocura-cognitiva/diagnostico
-  newTag: dev
+  newTag: latest
 - name: autocura-cognitiva/gerador-acoes
   newName: localhost:5000/autocura-cognitiva/gerador-acoes
-  newTag: dev
+  newTag: latest
 - name: autocura-cognitiva/observabilidade
   newName: localhost:5000/autocura-cognitiva/observabilidade
-  newTag: dev
+  newTag: latest
 - name: autocura-cognitiva/healing-operator
   newName: localhost:5000/autocura-cognitiva/healing-operator
-  newTag: dev
+  newTag: latest
 - name: autocura-cognitiva/rollback-operator
   newName: localhost:5000/autocura-cognitiva/rollback-operator
-  newTag: dev
+  newTag: latest

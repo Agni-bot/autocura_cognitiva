@@ -11,3 +11,6 @@ nodes:
     hostPort: 30001 
     protocol: TCP 
 containerdConfigPatches: 
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:5000"]
+    endpoint = ["http://host.docker.internal:5000"]

@@ -71,7 +71,7 @@ class SistemaAutocuraCognitiva:
 def main():
     # Configuração do logging
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     

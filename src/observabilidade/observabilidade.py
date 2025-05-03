@@ -49,9 +49,9 @@ logging.basicConfig(
 logger = logging.getLogger("Observabilidade4D")
 
 # Configuração das URLs dos serviços
-MONITORAMENTO_URL = os.getenv('MONITORAMENTO_URL', 'http://monitoramento:8080')
-DIAGNOSTICO_URL = os.getenv('DIAGNOSTICO_URL', 'http://diagnostico:8080')
-GERADOR_ACOES_URL = os.getenv('GERADOR_ACOES_URL', 'http://gerador-acoes:8080')
+MONITORAMENTO_URL = os.getenv('MONITORAMENTO_URL', 'http://127.0.0.1:8081')
+DIAGNOSTICO_URL = os.getenv('DIAGNOSTICO_URL', 'http://localhost:5002')
+GERADOR_ACOES_URL = os.getenv('GERADOR_ACOES_URL', 'http://localhost:5003')
 
 # Classes locais para substituir importações diretas
 @dataclass
@@ -694,6 +694,38 @@ def verificar_servicos_dependentes():
     
     return True
 
+def obter_diagnosticos_ativos():
+    """Busca diagnósticos ativos do serviço de diagnóstico via API REST."""
+    try:
+        url = f"{DIAGNOSTICO_URL}/api/v1/diagnosticos"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            dados = response.json()
+            # Se necessário, adaptar para a estrutura de Diagnostico local
+            return [Diagnostico(**d) for d in dados]
+        else:
+            logger.warning(f"Diagnóstico: resposta inesperada {response.status_code}")
+            return []
+    except Exception as e:
+        logger.error(f"Erro ao obter diagnósticos ativos: {e}")
+        return []
+
+def obter_acoes_priorizadas():
+    """Busca ações priorizadas do serviço de ações via API REST."""
+    try:
+        url = f"{GERADOR_ACOES_URL}/api/v1/acoes"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            dados = response.json()
+            # Se necessário, adaptar para a estrutura de AcaoCorretiva local
+            return [AcaoCorretiva(**a) for a in dados]
+        else:
+            logger.warning(f"Ações: resposta inesperada {response.status_code}")
+            return []
+    except Exception as e:
+        logger.error(f"Erro ao obter ações priorizadas: {e}")
+        return []
+
 # Inicialização da API e rotas
 if __name__ == "__main__":
     from flask import Flask, request, jsonify
@@ -735,8 +767,8 @@ if __name__ == "__main__":
     @app.route('/api/v1/diagnosticos', methods=['GET'])
     def get_diagnosticos():
         try:
-            # Implementar lógica para obter diagnósticos ativos
-            return jsonify([]), 200
+            diagnosticos = obter_diagnosticos_ativos()
+            return jsonify([d.__dict__ for d in diagnosticos]), 200
         except Exception as e:
             logger.error(f"Erro ao obter diagnósticos: {e}")
             return jsonify({"erro": "Erro ao obter diagnósticos"}), 500
@@ -744,8 +776,8 @@ if __name__ == "__main__":
     @app.route('/api/v1/acoes', methods=['GET'])
     def get_acoes():
         try:
-            # Implementar lógica para obter ações em andamento
-            return jsonify([]), 200
+            acoes = obter_acoes_priorizadas()
+            return jsonify([a.__dict__ for a in acoes]), 200
         except Exception as e:
             logger.error(f"Erro ao obter ações: {e}")
             return jsonify({"erro": "Erro ao obter ações"}), 500

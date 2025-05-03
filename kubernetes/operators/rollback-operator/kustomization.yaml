@@ -3,7 +3,7 @@ kind: Kustomization
 
 resources:
 - deployment.yaml
-- crds/rollbackpolicy.yaml
+- config/crd/bases/rollback.autocura-cognitiva.io_rollbackpolicies.yaml
 - pdb.yaml
 
 commonLabels:

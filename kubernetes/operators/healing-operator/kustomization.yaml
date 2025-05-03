@@ -3,7 +3,8 @@ kind: Kustomization
 
 resources:
 - deployment.yaml
-- crds/healingpolicy.yaml
+- config/crd/bases/healing.autocura-cognitiva.io_healingpolicies.yaml
+- config/crd/bases/healing.autocura-cognitiva.io_healings.yaml
 - pdb.yaml
 
 commonLabels:

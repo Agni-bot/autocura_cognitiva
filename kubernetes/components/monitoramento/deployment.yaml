@@ -6,21 +6,30 @@ metadata:
   labels:
     app: monitoramento
     component: autocura-cognitiva
+    app.kubernetes.io/component: monitoramento
+    app.kubernetes.io/part-of: autocura-cognitiva
+    app.kubernetes.io/managed-by: kustomize
 spec:
   replicas: 2
   selector:
     matchLabels:
       app: monitoramento
+      app.kubernetes.io/component: monitoramento
+      app.kubernetes.io/part-of: autocura-cognitiva
+      app.kubernetes.io/managed-by: kustomize
   template:
     metadata:
       labels:
         app: monitoramento
+        app.kubernetes.io/component: monitoramento
+        app.kubernetes.io/part-of: autocura-cognitiva
+        app.kubernetes.io/managed-by: kustomize
     spec:
       serviceAccountName: autocura-cognitiva-sa
       containers:
       - name: monitoramento
-        image: localhost:5000/autocura-cognitiva/monitoramento:dev
-        imagePullPolicy: IfNotPresent
+        image: localhost:5000/autocura-cognitiva/monitoramento:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
           name: http
