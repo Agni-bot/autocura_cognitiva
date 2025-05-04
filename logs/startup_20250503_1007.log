@@ -1,9 +1,0 @@
-[03/05/2025 10:07:28,39] [INFO] Iniciando script de inicialização do Sistema de Autocura Cognitiva 
-[03/05/2025 10:07:28,39] [INFO] Logs serão salvos em: C:\Users\i.A\Desktop\autocura_cognitiva\logs\startup_20250503_1007.log 
-[03/05/2025 10:07:28,39] [INFO] Verificando pré-requisitos... 
-[03/05/2025 10:07:28,45] [INFO] Versão do Docker: Docker version 28.1.1, build 4eba377 
-[03/05/2025 10:07:28,68] [INFO] Versão do kubectl: Kustomize Version: v5.6.0 
-[03/05/2025 10:07:28,68] [INFO] Configurando ambiente... 
-[03/05/2025 10:07:28,75] [INFO] Registry local já está rodando 
-[03/05/2025 10:07:42,08] [ERRO] Falha ao configurar cluster Kind 
-[03/05/2025 10:07:42,08] [ERRO] Falha na configuração do ambiente 
